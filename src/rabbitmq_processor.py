@@ -86,7 +86,7 @@ class ChainedRabbitMQProcessor:
             
             # Convert message to JSON if it's a dict or list
             if isinstance(message, (dict, list)):
-                message_body = json.dumps(message)
+                message_body = json.dumps(message, ensure_ascii=False)
             elif not isinstance(message, str):
                 message_body = str(message)
             else:

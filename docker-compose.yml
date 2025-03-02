@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  nx-editor:
+    build: .
+    image: docker.x51.vn/nx/nx-editor8:1.0.1
+    container_name: nx-editor
+    restart: unless-stopped
+    volumes:
+      - ./:/app
+    environment:
+      # Configure these to point to your external RabbitMQ server
+      - RABBITMQ_HOST=host.docker.internal  # Use your actual RabbitMQ server host
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASS=guest
+      - RABBITMQ_VHOST=/
+      - INPUT_QUEUE=nx_01_ai_queue
+      - OUTPUT_QUEUE=nx_02_queue
+
+    network_mode: "host"  # Optional: Use host networking to access local RabbitMQ easily

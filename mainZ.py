@@ -10,6 +10,7 @@ from src.script2json import script2json
 from src.chained_processor import ProcessorChain
 from src.rabbitmq_processor import ChainedRabbitMQProcessor
 from src.logger import logger
+from src.config import INPUT_QUEUE, OUTPUT_QUEUE, PROCESSOR_ID, get_log_level
 
 # Make sure the working directory is correctly set
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,7 +20,6 @@ if current_dir not in sys.path:
 def error_handler(message, error, processor_name):
     """Handle errors in processors"""
     logger.info(f"Starting error_handler for processor: {processor_name}")
-    # ... existing code ...
     logger.error(f"Error occurred in {processor_name}: {str(error)}")
     
     if isinstance(message, dict):
@@ -74,12 +74,10 @@ def run_processor(input_queue="chain_input", output_queue=None):
     return processor
 
 def main():
-    logger.set_level("DEBUG")
-    input_queue = 'nx_01_ai_queue'
-    output_queue = 'nx_02_queue'
-
-    # Set up signal handlers for graceful shutdown
-    processor = run_processor(input_queue, output_queue)
+    logger.set_level(get_log_level())
+    
+    # Use configuration values instead of hardcoded strings
+    processor = run_processor(INPUT_QUEUE, OUTPUT_QUEUE)
 
     if not processor:
         sys.exit(1)
@@ -92,7 +90,7 @@ def main():
     signal.signal(signal.SIGINT, handle_shutdown)
     signal.signal(signal.SIGTERM, handle_shutdown)
     
-    logger.info(f"Chain processor 'X' running. Press Ctrl+C to exit.")
+    logger.info(f"Chain processor '{PROCESSOR_ID}' running. Press Ctrl+C to exit.")
     
     # Keep main thread alive
     try:
