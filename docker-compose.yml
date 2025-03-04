@@ -3,11 +3,9 @@ version: '3.8'
 services:
   nx-editor:
     build: .
-    image: docker.x51.vn/nx/nx-editor8:1.0.1
+    image: docker.x51.vn/nx/nx-editor8:1.0.4
     container_name: nx-editor
     restart: unless-stopped
-    volumes:
-      - ./:/app
     environment:
       # Configure these to point to your external RabbitMQ server
       - RABBITMQ_HOST=host.docker.internal  # Use your actual RabbitMQ server host

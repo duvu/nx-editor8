@@ -17,8 +17,18 @@ def parse_media_line(line: str) -> dict:
     parts = [p.strip() for p in line.split(',')]
     url = parts[0]
     
+    # Determine if the media is an image or video based on URL
+    media_type = "video"
+    if re.search(r'\.(jpg|jpeg|png|gif|bmp|webp|tiff|svg)(\?|$|#)', url.lower()):
+        media_type = "image"
+    elif any(x in url.lower() for x in ["youtu.be", "youtube.com", "vimeo.com"]):
+        media_type = "video"
+    elif re.search(r'\.(mp4|mov|avi|wmv|flv|webm|mkv)(\?|$|#)', url.lower()):
+        media_type = "video"
+    
     media_obj = {
         "url": url,
+        "type": media_type,  # Added type field
         "pickes": [],
         "crop": None,
         "excludes": [],
@@ -46,6 +56,9 @@ def parse_media_line(line: str) -> dict:
             sub_params = {k.strip(): int(v.strip()) if v.strip().isdigit() else v.strip() 
                           for k, v in (x.split('=') for x in val.split(';') if '=' in x)}
             media_obj["effect"]["params"] = sub_params
+        # Check for explicit type specification in parameters
+        elif p.startswith('type='):
+            media_obj["type"] = p.replace('type=', '').strip()
     
     logger.debug(f'Parsed media: {media_obj}')  # Use logger instead of print
     return media_obj

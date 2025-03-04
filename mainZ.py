@@ -4,6 +4,7 @@ import time
 import signal
 import random
 import os
+import re
 
 # Update imports to reference the src directory
 from src.script2json import script2json
@@ -11,6 +12,7 @@ from src.chained_processor import ProcessorChain
 from src.rabbitmq_processor import ChainedRabbitMQProcessor
 from src.logger import logger
 from src.config import INPUT_QUEUE, OUTPUT_QUEUE, PROCESSOR_ID, get_log_level
+from src.image_search import ImageSearch
 
 # Make sure the working directory is correctly set
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -41,10 +43,62 @@ def extract_article(message):
         logger.error("No article found in message")
         return None
     return article
+
 def generate_script(article):
-    """Generate script from article"""
+    """Generate script from article with image verification and replacement"""
     logger.info("Starting generate_script processor")
-    return article
+    
+    # Initialize image search helper
+    image_searcher = ImageSearch()
+    
+    # Extract keywords from the script (lines starting with #)
+    keywords = ""
+    lines = article.strip().split('\n')
+    for line in lines:
+        if line.startswith('#'):
+            keywords = line.strip('#').strip()
+            break
+    
+    # If no keywords found, set a default
+    if not keywords:
+        keywords = "generic images"
+    
+    logger.info(f"Extracted keywords: {keywords}")
+    
+    # Process each line and replace unreachable image URLs
+    modified_lines = []
+    for line in lines:
+        if line.startswith('http://') or line.startswith('https://'):
+            # Extract the URL part (before any comma)
+            url_parts = line.split(',', 1)
+            url = url_parts[0].strip()
+            
+            # Check if this URL is an image (not a video)
+            is_image = bool(re.search(r'\.(jpg|jpeg|png|gif|bmp|webp|tiff|svg)(\?|$|#)', url.lower()))
+            
+            # For images, check if URL is accessible
+            if is_image and not image_searcher.is_url_accessible(url):
+                logger.warning(f"Image URL not accessible: {url}")
+                
+                # Get alternative image based on keywords
+                new_url = image_searcher.get_alternative_image(keywords)
+                
+                if new_url:
+                    logger.info(f"Replacing with alternative image: {new_url}")
+                    
+                    # Replace the URL in the original line
+                    if len(url_parts) > 1:
+                        line = f"{new_url},{url_parts[1]}"
+                    else:
+                        line = new_url
+                    
+                    # Add a comment to indicate replacement
+                    modified_lines.append(f"# Original unreachable image: {url}")
+            
+        modified_lines.append(line)
+    
+    # Join lines back into a single string
+    return '\n'.join(modified_lines)
 
 def s2j(script):
     """Convert script to JSON format"""

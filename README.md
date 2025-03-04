@@ -155,3 +155,34 @@ processor.process_with_chain('input_queue', chain, 'output_queue')
 - Graceful shutdown handling
 - Error handling in processor chains
 - Message routing and transformation
+
+# NX Editor 8
+
+## Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/your-username/nx-editor8.git
+   cd nx-editor8
+   ```
+
+2. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+
+3. Run the processor:
+   ```
+   python mainZ.py
+   ```
+
+## Features
+
+- Script to JSON conversion
+- Automatic image replacement for unreachable URLs
+- Integration with DuckDuckGo for image search
+- RabbitMQ message processing
+
+## Configuration
+
+Adjust the settings in `src/config.py` to configure the application.
