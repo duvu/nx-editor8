@@ -44,9 +44,9 @@ def extract_article(message):
         return None
     return article
 
-def generate_script(article):
-    """Generate script from article with image verification and replacement"""
-    logger.info("Starting generate_script processor")
+def image_validator_processor(article):
+    """Check and replace unreachable image URLs in the article"""
+    logger.info("Starting image validator processor")
     
     # Initialize image search helper
     image_searcher = ImageSearch()
@@ -100,7 +100,69 @@ def generate_script(article):
     # Join lines back into a single string
     return '\n'.join(modified_lines)
 
-def s2j(script):
+def script_processor(article):
+    """Perform additional script processing"""
+    logger.info("Starting script processor")
+    
+    # Count existing image lines
+    lines = article.strip().split('\n')
+    image_lines = [line for line in lines if line.startswith('http://') or line.startswith('https://')]
+    image_count = len(image_lines)
+    
+    logger.info(f"Found {image_count} image lines in the article")
+    
+    # If we have fewer than 5 images, add more
+    if image_count < 5:
+        # Extract keywords from the script (lines starting with #)
+        keywords = ""
+        for line in lines:
+            if line.startswith('#'):
+                keywords = line.strip('#').strip()
+                break
+        
+        # If no keywords found, set a default
+        if not keywords:
+            keywords = "generic images"
+        
+        logger.info(f"Using keywords '{keywords}' to find additional images")
+        
+        # Initialize image search helper
+        image_searcher = ImageSearch()
+        
+        # Add new image lines
+        new_images_needed = 5 - image_count
+        added_images = []
+        
+        for i in range(new_images_needed):
+            new_url = image_searcher.get_alternative_image(keywords)
+            if new_url:
+                added_images.append(new_url)
+                logger.info(f"Added new image: {new_url}")
+        
+        # Insert new image lines after existing images or at the end if no images exist
+        if image_lines:
+            # Find the position of the last image line
+            last_img_pos = 0
+            for i, line in enumerate(lines):
+                if line.startswith('http://') or line.startswith('https://'):
+                    last_img_pos = i
+            
+            # Add comment and new images after the last image line
+            lines.insert(last_img_pos + 1, "# Auto-generated additional images:")
+            for i, img in enumerate(added_images):
+                lines.insert(last_img_pos + 2 + i, img)
+        else:
+            # If no images exist, add them at the end
+            lines.append("# Auto-generated images:")
+            lines.extend(added_images)
+        
+        # Join lines back into a single string
+        article = '\n'.join(lines)
+        logger.info(f"Added {len(added_images)} new images to reach minimum of 5 images")
+    
+    return article
+
+def s2j_processor(script):
     """Convert script to JSON format"""
     logger.info("Starting script2json processor")
     return script2json(script)
@@ -108,8 +170,9 @@ def s2j(script):
 def create_complete_pipeline():
     chain = ProcessorChain("complete_pipeline")
     chain.add_processor(extract_article, "extract_article")
-    chain.add_processor(generate_script, "generate_script")
-    chain.add_processor(s2j, "script2json")
+    chain.add_processor(image_validator_processor, "image_validator_processor")
+    chain.add_processor(script_processor, "script_processor")
+    chain.add_processor(s2j_processor, "script2json")
     chain.set_error_handler(error_handler)
     return chain
 

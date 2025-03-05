@@ -2,7 +2,7 @@ import re
 import random
 import json
 import os
-from .logger import logger  # Fixed import to use the correct logger module
+from src.logger import logger  # Fixed import to use the correct logger module
 
 def parse_media_line(line: str) -> dict:
     """
@@ -63,20 +63,11 @@ def parse_media_line(line: str) -> dict:
     logger.debug(f'Parsed media: {media_obj}')  # Use logger instead of print
     return media_obj
 
-def script2json(script: str) -> dict:
+def initialize_result_structure() -> dict:
     """
-    Parse a script text into a structured format for video generation.
-    
-    Args:
-        script: The raw script text
-        
-    Returns:
-        Dictionary with structured video information
+    Create and return the initial structure for the video data.
     """
-    logger.info("Parsing script...")
-    
-    MUSIC_LIST = ["track_random_1", "track_random_2", "track_random_3"]    
-    result = {
+    return {
         "category": None,
         "title": None,
         "keyword": [],
@@ -93,10 +84,122 @@ def script2json(script: str) -> dict:
         "video": [],
         "is_vertical": False
     }
+
+def parse_header_line(line: str, result: dict) -> bool:
+    """
+    Parse the first line of the script which contains category and title.
+    
+    Args:
+        line: The line to parse
+        result: The result structure to update
+        
+    Returns:
+        True if the line was successfully parsed as a header
+    """
+    if ':' in line:
+        parts = line.split(':', 1)
+        result["category"] = parts[0].strip()
+        result["title"] = parts[1].strip()
+        logger.info(f"Parsed category: {result['category']}, title: {result['title']}")
+    else:
+        result["category"] = line
+        logger.info(f"Parsed category: {result['category']}")
+    return True
+
+def parse_metadata_line(line: str, result: dict) -> bool:
+    """
+    Parse metadata lines (starting with +, #, $)
+    
+    Args:
+        line: The line to parse
+        result: The result structure to update
+        
+    Returns:
+        True if the line was a metadata line and processed
+    """
+    if line.startswith('+'):
+        ln = line.lstrip('+').strip()
+        if ':' in ln:
+            key, val = ln.split(':', 1)
+            key = key.strip()
+            val = val.strip()
+            result[key] = val  
+            logger.debug(f"Added metadata: {key} = {val}")     
+        return True
+    elif line.startswith('#'):
+        result["keyword"] = line.lstrip('#').strip()
+        logger.debug(f"Added keyword: {result['keyword']}")
+        return True
+    elif line.startswith('$'):
+        result["src"] = line.lstrip('$').strip()
+        logger.debug(f"Added source: {result['src']}")
+        return True
+    return False
+
+def flush_segment(media_buffer, text_buffer, result):
+    """
+    Flush the current media and text buffers into a new segment.
+    
+    Args:
+        media_buffer: List of media items to include
+        text_buffer: List of text content
+        result: The result structure to update
+    """
+    if media_buffer:
+        if not text_buffer:
+            text_buffer.append("")  # Avoid case with no text
+        segment = {
+            "media_clips": media_buffer.copy(),
+            "content": text_buffer.copy(),
+        }
+        result["video"].append(segment)
+        logger.debug(f"Flushed segment with {len(segment['media_clips'])} media clips")
+        return True
+    return False
+
+def process_text_line(line: str):
+    """
+    Process a text line, checking if it contains special commands.
+    
+    Args:
+        line: The line to process
+        
+    Returns:
+        Tuple of (is_command, command_type, command_value)
+    """
+    re_break = re.compile(r'^<break(?:=(\d+))?>$')
+    re_music = re.compile(r'^<music(?:=(\d+))?>$')
+    
+    m_b = re_break.match(line)
+    if m_b:
+        duration = m_b.group(1) or "1"
+        logger.debug(f"Parsed break command with duration: {duration}")
+        return True, "break", duration
+        
+    m_m = re_music.match(line)
+    if m_m:
+        music_id = m_m.group(1) or ""
+        logger.debug(f"Parsed music command with ID: {music_id}")
+        return True, "music", music_id
+        
+    return False, None, None
+
+def script2json(script: str) -> dict:
+    """
+    Parse a script text into a structured format for video generation.
+    
+    Args:
+        script: The raw script text
+        
+    Returns:
+        Dictionary with structured video information
+    """
+    logger.info("Parsing script...")
+    
+    MUSIC_LIST = ["track_random_1", "track_random_2", "track_random_3"]    
+    result = initialize_result_structure()
     
     lines = script.strip().split('\n')
-    re_break = re.compile(r'^<break(?:=(\d+))?>')
-    re_music = re.compile(r'^<music(?:=(\d+))?>')
     
     # Buffers for main content
     main_media_buffer = []  # Store media lines not yet flushed
@@ -104,21 +207,6 @@ def script2json(script: str) -> dict:
     
     global_bg = None
     first_line_processed = False
-    
-    def flush_main_segment():
-        nonlocal main_media_buffer, main_text_buffer, result
-        # Only flush if at least one media has been read
-        if main_media_buffer:
-            if not main_text_buffer:
-                main_text_buffer.append("")  # Avoid case with no text
-            segment = {
-                "media_clips": main_media_buffer,
-                "content": main_text_buffer,
-            }
-            result["video"].append(segment)
-            main_media_buffer = []
-            main_text_buffer = []
-            logger.debug(f"Flushed segment with {len(segment['media_clips'])} media clips")
     
     for line in lines:
         line = line.strip()
@@ -129,67 +217,38 @@ def script2json(script: str) -> dict:
         
         # First line: "Category: Title"
         if not first_line_processed:
-            if ':' in line:
-                parts = line.split(':', 1)
-                result["category"] = parts[0].strip()
-                result["title"] = parts[1].strip()
-                logger.info(f"Parsed category: {result['category']}, title: {result['title']}")
-            else:
-                result["category"] = line
-                logger.info(f"Parsed category: {result['category']}")
+            parse_header_line(line, result)
             first_line_processed = True
             continue
         
-        # Process main content metadata (not part of segment content)
-        if line.startswith('+'):
-            ln = line.lstrip('+').strip()
-            if ':' in ln:
-                key, val = ln.split(':', 1)
-                key = key.strip()
-                val = val.strip()
-                result[key] = val  
-                logger.debug(f"Added metadata: {key} = {val}")     
-            continue
-        if line.startswith('#'):
-            result["keyword"] = line.lstrip('#').strip()
-            logger.debug(f"Added keyword: {result['keyword']}")
-            continue
-        if line.startswith('$'):
-            result["src"] = line.lstrip('$').strip()
-            logger.debug(f"Added source: {result['src']}")
+        # Process metadata lines
+        if parse_metadata_line(line, result):
             continue
 
+        # Process media lines
         if line.startswith('http://') or line.startswith('https://'):
             if main_text_buffer:
-                flush_main_segment()
+                flush_segment(main_media_buffer, main_text_buffer, result)
+                main_media_buffer = []
+                main_text_buffer = []
+            
             media_data = parse_media_line(line)
             main_media_buffer.append(media_data)
             logger.debug(f"Added media: {media_data['url']}, type: {media_data.get('type', 'image')}")
         else:
-            # This line is text (or <break>, <music> command)
-            m_b = re_break.match(line)
-            m_m = re_music.match(line)
-            if m_b:
-                duration = m_b.group(1) or "1"
-                logger.debug(f"Parsed break command with duration: {duration}")
-                pass  # Do nothing, handled in media flush
-            elif m_m:
-                music_id = m_m.group(1) or ""
-                logger.debug(f"Parsed music command with ID: {music_id}")
-                pass
-            else:
+            # This line is text or a command
+            is_command, cmd_type, cmd_value = process_text_line(line)
+            if not is_command:
                 main_text_buffer.append(line)
                 logger.debug(f"Added text: {line[:30]}...")
     
     # End of main content: if there are still media not flushed, flush segment
-    if main_media_buffer:
-        flush_main_segment()
+    flush_segment(main_media_buffer, main_text_buffer, result)
 
     # If global background music hasn't been set, choose randomly
-    if global_bg is None:
-        global_bg = random.choice(MUSIC_LIST)
-        result["background_music"] = global_bg
-        logger.info(f"Set random background music: {global_bg}")
+    if not result["background_music"]:
+        result["background_music"] = random.choice(MUSIC_LIST)
+        logger.info(f"Set random background music: {result['background_music']}")
     
     logger.info(f"Script parsing complete. Created {len(result['video'])} segments.")
     return result
