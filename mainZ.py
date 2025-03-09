@@ -35,18 +35,23 @@ def error_handler(message, error, processor_name):
     return None  # Drop the message if it's not a dict
 
 def extract_article(message):
-    """Extract article from message"""
+    """Extract article and title from message"""
     logger.info("Starting extract_article processor")
     # extract article from message. It's the field "article"
     article = message.get("article", "")
+    title = message.get("title", "")  # Extract the title
     if not article:
         logger.error("No article found in message")
         return None
-    return article
+    return {"article": article, "title": title}  # Return both as a dictionary
 
-def image_validator_processor(article):
+def image_validator_processor(data):
     """Check and replace unreachable image URLs in the article"""
     logger.info("Starting image validator processor")
+    
+    # Extract article and title from the input data
+    article = data["article"]
+    title = data["title"]
     
     # Initialize image search helper
     image_searcher = ImageSearch()
@@ -59,9 +64,10 @@ def image_validator_processor(article):
             keywords = line.strip('#').strip()
             break
     
-    # If no keywords found, set a default
+    # If no keywords found, use title instead of default
     if not keywords:
-        keywords = "generic images"
+        keywords = title if title else "generic images"
+        logger.info(f"No keywords found, using title: {keywords}")
     
     logger.info(f"Extracted keywords: {keywords}")
     
@@ -92,17 +98,21 @@ def image_validator_processor(article):
                     else:
                         line = new_url
                     
-                    # Add a comment to indicate replacement
-                    modified_lines.append(f"# Original unreachable image: {url}")
+                    # Removed comment about original unreachable image
             
         modified_lines.append(line)
     
     # Join lines back into a single string
-    return '\n'.join(modified_lines)
+    data["article"] = '\n'.join(modified_lines)
+    return data
 
-def script_processor(article):
+def script_processor(data):
     """Perform additional script processing"""
     logger.info("Starting script processor")
+    
+    # Extract article and title
+    article = data["article"]
+    title = data["title"]
     
     # Count existing image lines
     lines = article.strip().split('\n')
@@ -120,9 +130,10 @@ def script_processor(article):
                 keywords = line.strip('#').strip()
                 break
         
-        # If no keywords found, set a default
+        # If no keywords found, use title instead of default
         if not keywords:
-            keywords = "generic images"
+            keywords = title if title else "generic images"
+            logger.info(f"No keywords found, using title: {keywords}")
         
         logger.info(f"Using keywords '{keywords}' to find additional images")
         
@@ -147,25 +158,23 @@ def script_processor(article):
                 if line.startswith('http://') or line.startswith('https://'):
                     last_img_pos = i
             
-            # Add comment and new images after the last image line
-            lines.insert(last_img_pos + 1, "# Auto-generated additional images:")
+            # Add new images after the last image line (removed comment)
             for i, img in enumerate(added_images):
-                lines.insert(last_img_pos + 2 + i, img)
+                lines.insert(last_img_pos + 1 + i, img)
         else:
-            # If no images exist, add them at the end
-            lines.append("# Auto-generated images:")
+            # If no images exist, add them at the end (removed comment)
             lines.extend(added_images)
         
         # Join lines back into a single string
-        article = '\n'.join(lines)
+        data["article"] = '\n'.join(lines)
         logger.info(f"Added {len(added_images)} new images to reach minimum of 5 images")
     
-    return article
+    return data
 
-def s2j_processor(script):
+def s2j_processor(data):
     """Convert script to JSON format"""
     logger.info("Starting script2json processor")
-    return script2json(script)
+    return script2json(data["article"])
 
 def create_complete_pipeline():
     chain = ProcessorChain("complete_pipeline")
