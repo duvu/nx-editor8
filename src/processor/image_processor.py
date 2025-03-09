@@ -3,6 +3,42 @@
 
 """
 Module xử lý và xác thực hình ảnh trong bài viết
+
+Module này cung cấp các chức năng để xử lý hình ảnh trong bài viết, bao gồm:
+1. Kiểm tra tính khả dụng của các URL hình ảnh trong bài viết
+2. Thay thế các URL hình ảnh không khả dụng bằng hình ảnh thay thế
+3. Tìm kiếm hình ảnh thay thế dựa trên từ khóa hoặc tiêu đề bài viết
+
+Quy trình xử lý:
+1. Phân tích bài viết để tìm các URL hình ảnh
+2. Kiểm tra tính khả dụng của từng URL bằng cách gửi HTTP request
+3. Đối với các URL không khả dụng, tìm kiếm hình ảnh thay thế
+4. Thay thế URL trong bài viết với URL mới
+
+Cách sử dụng:
+    from src.processor import image_processor
+    
+    # Dữ liệu đầu vào là một dict chứa bài viết và tiêu đề
+    data = {
+        "article": "Nội dung bài viết với các URL hình ảnh...", 
+        "title": "Tiêu đề bài viết"
+    }
+    
+    # Xử lý hình ảnh
+    processed_data = image_processor(data)
+
+Tham số đầu vào:
+    data (dict): Dict chứa bài viết ('article') và tiêu đề ('title')
+
+Kết quả trả về:
+    dict: Dict chứa bài viết đã được xử lý với các URL hình ảnh đã được kiểm tra/thay thế
+
+Phụ thuộc:
+    - ImageSearch: Lớp hỗ trợ tìm kiếm và kiểm tra hình ảnh
+    - logger: Module ghi log
+
+Tác giả: NX-Editor8 Team
+Phiên bản: 1.0
 """
 
 import re
