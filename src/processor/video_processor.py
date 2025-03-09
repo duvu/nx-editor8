@@ -229,7 +229,7 @@ def process_article_lines(
     lines: List[str], 
     keywords: str, 
     video_searcher: VideoSearch
-) -> Tuple[List[str], int, int]:
+) -> Tuple[List[str], int, int, int]:
     """
     Xử lý tất cả các dòng trong bài viết để kiểm tra và thay thế video
     
@@ -239,11 +239,12 @@ def process_article_lines(
         video_searcher: Đối tượng VideoSearch
         
     Returns:
-        Tuple (dòng đã xử lý, số video đã kiểm tra, số video đã thay thế)
+        Tuple (dòng đã xử lý, số video đã kiểm tra, số video đã thay thế, số video có trong bài viết)
     """
     modified_lines = []
     checked_count = 0
     replaced_count = 0
+    video_count = 0
     
     i = 0
     while i < len(lines):
@@ -257,6 +258,7 @@ def process_article_lines(
             
             if is_video:
                 checked_count += 1
+                video_count += 1
                 if replaced:
                     replaced_count += 1
             
@@ -271,7 +273,93 @@ def process_article_lines(
             
         i += 1
     
-    return modified_lines, checked_count, replaced_count
+    return modified_lines, checked_count, replaced_count, video_count
+
+
+def add_additional_videos(
+    lines: List[str],
+    keywords: str,
+    video_searcher: VideoSearch,
+    min_videos: int = 3
+) -> List[str]:
+    """
+    Thêm video bổ sung vào bài viết cho đến khi đạt số lượng tối thiểu
+    
+    Args:
+        lines: Danh sách các dòng trong bài viết đã xử lý
+        keywords: Từ khóa để tìm kiếm video
+        video_searcher: Đối tượng VideoSearch
+        min_videos: Số lượng video tối thiểu cần có trong bài viết
+        
+    Returns:
+        Danh sách các dòng sau khi thêm video
+    """
+    logger.info(f"Adding additional videos to reach minimum of {min_videos} videos")
+    
+    # Tìm vị trí thích hợp để thêm video
+    # Ưu tiên thêm vào cuối bài viết, trước các phần tử # hoặc ## (phần kết luận)
+    insert_position = len(lines)
+    for i in range(len(lines) - 1, -1, -1):
+        if lines[i].startswith('# ') or lines[i].startswith('## '):
+            insert_position = i
+            break
+    
+    # Số lượng video cần thêm
+    videos_to_add = min_videos - len([l for l in lines if is_video_url(l) and not l.startswith('EMBED:')])
+    
+    if videos_to_add <= 0:
+        logger.info("No additional videos needed")
+        return lines
+    
+    logger.info(f"Need to add {videos_to_add} more videos at position {insert_position}")
+    
+    # Thêm mỗi video
+    videos_added = 0
+    attempts = 0
+    max_attempts = videos_to_add * 3  # Giới hạn số lần thử để tránh vòng lặp vô hạn
+    
+    while videos_added < videos_to_add and attempts < max_attempts:
+        attempts += 1
+        
+        # Tìm video mới
+        logger.debug(f"Searching for additional video {videos_added + 1}/{videos_to_add}")
+        alt_video = video_searcher.get_alternative_video(keywords)
+        
+        if alt_video and 'url' in alt_video:
+            new_url = alt_video['url']
+            
+            # Kiểm tra xem URL này đã có trong bài viết chưa
+            if new_url in '\n'.join(lines):
+                logger.debug(f"Video URL already exists in article, skipping: {new_url}")
+                continue
+                
+            logger.info(f"Adding new video: {new_url}")
+            
+            # Thêm dòng mới
+            new_lines = []
+            new_lines.append("")  # Dòng trống trước video
+            new_lines.append(new_url)
+            
+            # Thêm mã nhúng HTML nếu có
+            if 'embed_html' in alt_video:
+                embed_line = f"EMBED:{alt_video['embed_html']}"
+                new_lines.append(embed_line)
+            
+            # Chèn vào vị trí đã xác định
+            lines[insert_position:insert_position] = new_lines
+            insert_position += len(new_lines)
+            videos_added += 1
+        else:
+            logger.warning(f"Failed to find additional video for '{keywords}'")
+            # Tạm dừng để tránh gửi quá nhiều requests
+            time.sleep(1)
+    
+    if videos_added > 0:
+        logger.info(f"Successfully added {videos_added} videos to the article")
+    else:
+        logger.warning("Could not add any additional videos to the article")
+        
+    return lines
 
 
 def validate_input(data: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
@@ -330,15 +418,24 @@ def video_processor(data: Dict[str, Any]) -> Dict[str, Any]:
     logger.info(f"Using keywords for video search: '{keywords}'")
     
     # Xử lý các dòng trong bài viết
-    modified_lines, checked_count, replaced_count = process_article_lines(
+    modified_lines, checked_count, replaced_count, video_count = process_article_lines(
         lines, keywords, video_searcher
     )
+    
+    # Kiểm tra xem có đủ số lượng video tối thiểu không (ít nhất 3 video)
+    MIN_VIDEOS = 3
+    logger.info(f"Article has {video_count} videos, minimum required: {MIN_VIDEOS}")
+    
+    if video_count < MIN_VIDEOS:
+        # Thêm video cho đến khi đạt số lượng tối thiểu
+        logger.info(f"Adding {MIN_VIDEOS - video_count} more videos to reach minimum")
+        modified_lines = add_additional_videos(modified_lines, keywords, video_searcher, MIN_VIDEOS)
     
     # Nối các dòng lại thành bài viết
     data["article"] = '\n'.join(modified_lines)
     
     # Ghi log thông tin xử lý
     processing_time = time.time() - start_time
-    logger.info(f"Video processing complete. Checked {checked_count} videos, replaced {replaced_count} unreachable videos in {processing_time:.2f}s")
+    logger.info(f"Video processing complete. Checked {checked_count} videos, replaced {replaced_count} unreachable videos, ensured minimum {MIN_VIDEOS} videos in {processing_time:.2f}s")
     
     return data 
