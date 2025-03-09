@@ -480,22 +480,83 @@ class VideoSearch:
         try:
             # Tìm kiếm trực tiếp với DuckDuckGo để tăng tốc độ
             duck_results = self.search_duckduckgo_videos(search_query, max_results=10)
-            # Ghi logs kết quả tìm kiếm từ DuckDuckGo
             logger.info(f"DuckDuckGo trả về {len(duck_results)} kết quả cho từ khóa '{search_query}'")
             
+            # Log thông tin chi tiết về các kết quả
             for i, result in enumerate(duck_results):
-                logger.debug(f"Kết quả {i+1}:")
-                logger.debug(f"- Tiêu đề: {result.get('title', 'Không có tiêu đề')}")
-                logger.debug(f"- URL: {result.get('url', 'Không có URL')}")
-                logger.debug(f"- Thời lượng: {result.get('duration', 'Không xác định')}")
-                logger.debug(f"- Thumbnail: {result.get('image', 'Không có thumbnail')}")
-                logger.debug(f"- Mô tả: {result.get('description', 'Không có mô tả')}")
+                url = result.get('url', 'Không có URL')
+                title = result.get('title', 'Không có tiêu đề')
+                is_supported = self._is_supported_video_platform(url)
+                logger.debug(f"Kết quả #{i+1}: {title} - {url} - Hỗ trợ: {is_supported}")
+                
+                # Log domain của URL để kiểm tra
+                if url:
+                    parsed_url = urlparse(url)
+                    domain = parsed_url.netloc.lower()
+                    logger.debug(f"Domain: {domain}")
+                    
+                    # Kiểm tra xem domain có khớp với bất kỳ platform nào không
+                    matches = [platform for platform in self.supported_platforms if platform in domain]
+                    logger.debug(f"Khớp với platforms: {matches}")
+            
             # Lọc các URL từ nền tảng được hỗ trợ
             valid_results = [result for result in duck_results 
                            if self._is_supported_video_platform(result.get('url', ''))]
             
+            logger.info(f"Sau khi lọc, còn {len(valid_results)} kết quả hợp lệ từ các nền tảng được hỗ trợ")
+            
             if not valid_results:
+                # Nếu không có kết quả hợp lệ, kiểm tra danh sách nền tảng hỗ trợ
                 logger.warning(f"No valid video results found for keywords: '{keywords}'")
+                logger.debug(f"Supported platforms: {self.supported_platforms}")
+                
+                # Thử bỏ qua kiểm tra nền tảng và sử dụng kết quả đầu tiên
+                if duck_results:
+                    logger.info("Sử dụng kết quả đầu tiên bất kể nền tảng")
+                    selected_result = duck_results[0]
+                    url = selected_result.get('url', '')
+                    
+                    # Tạo thông tin video từ kết quả DuckDuckGo
+                    platform = "Unknown"
+                    parsed_url = urlparse(url)
+                    domain = parsed_url.netloc.lower()
+                    logger.debug(f"Using domain: {domain}")
+                    
+                    embed_url = url  # Sử dụng URL gốc nếu không thể tạo URL nhúng
+                    
+                    # Chuyển đổi thời lượng từ string "MM:SS" sang số giây
+                    duration_str = selected_result.get('duration', '0:00')
+                    duration = 0
+                    
+                    try:
+                        if duration_str:
+                            parts = duration_str.split(':')
+                            if len(parts) == 2:  # MM:SS
+                                duration = int(parts[0]) * 60 + int(parts[1])
+                            elif len(parts) == 3:  # H:MM:SS
+                                duration = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+                    except Exception as e:
+                        logger.debug(f"Error parsing duration '{duration_str}': {str(e)}")
+                    
+                    video_info = {
+                        'url': url,
+                        'title': selected_result.get('title', 'Unknown Title'),
+                        'description': selected_result.get('description', ''),
+                        'thumbnail': selected_result.get('image', ''),
+                        'duration': duration,
+                        'view_count': 0,
+                        'upload_date': '',
+                        'channel': selected_result.get('content', '').split(' by ')[-1] if selected_result.get('content', '') else 'Unknown',
+                        'channel_url': '',
+                        'embed_url': embed_url,
+                        'platform': platform,
+                        'resolution': 0,
+                        'source': 'duckduckgo'
+                    }
+                    
+                    logger.info(f"Selected fallback video: {video_info.get('title')}")
+                    return video_info
+                
                 return None
                 
             # Chọn ngẫu nhiên một video
@@ -593,13 +654,64 @@ class VideoSearch:
     def _is_supported_video_platform(self, url: str) -> bool:
         """Kiểm tra xem URL có phải từ nền tảng video được hỗ trợ không"""
         if not url:
+            logger.debug("Empty URL provided to _is_supported_video_platform")
             return False
             
-        parsed_url = urlparse(url)
-        domain = parsed_url.netloc.lower()
-        
-        # Kiểm tra domain có chứa bất kỳ nền tảng hỗ trợ nào
-        return any(platform in domain for platform in self.supported_platforms)
+        try:
+            parsed_url = urlparse(url)
+            domain = parsed_url.netloc.lower()
+            
+            logger.debug(f"Checking if domain '{domain}' is supported")
+            
+            # Kiểm tra từng platform trong danh sách hỗ trợ
+            supported = False
+            for platform in self.supported_platforms:
+                if platform in domain:
+                    logger.debug(f"Matched with supported platform: {platform}")
+                    supported = True
+                    break
+            
+            # Thêm kiểm tra đặc biệt cho các trang video có domain không chuẩn
+            if not supported:
+                # Kiểm tra một số trường hợp đặc biệt
+                special_cases = [
+                    ('bilibili.com', 'Bilibili'),
+                    ('twitch.tv', 'Twitch'),
+                    ('v.qq.com', 'Tencent Video'),
+                    ('iqiyi.com', 'iQIYI'),
+                    ('video.google.com', 'Google Video'),
+                    ('m.youtube.com', 'YouTube Mobile'),
+                    ('youku.com', 'Youku'),
+                    ('nicovideo.jp', 'Niconico'),
+                    ('tv.naver.com', 'Naver TV'),
+                    ('slideshare.net', 'SlideShare'),
+                    ('vk.com', 'VK'),
+                    ('rutube.ru', 'RuTube'),
+                    # Thêm các trường hợp đặc biệt khác
+                ]
+                
+                for case, platform_name in special_cases:
+                    if case in domain:
+                        logger.debug(f"Matched with special case platform: {platform_name}")
+                        supported = True
+                        # Thêm vào danh sách nền tảng hỗ trợ để lần sau không cần kiểm tra đặc biệt
+                        if case not in self.supported_platforms:
+                            self.supported_platforms.append(case)
+                        break
+            
+            # Bỏ qua kiểm tra nền tảng nếu URL chứa từ khóa "video"
+            if not supported and ("video" in url.lower() or "watch" in url.lower()):
+                logger.debug(f"URL contains 'video' or 'watch', assuming it's a video: {url}")
+                supported = True
+            
+            if not supported:
+                logger.debug(f"URL from unsupported platform: {domain}")
+            
+            return supported
+        except Exception as e:
+            logger.error(f"Error checking platform support for URL '{url}': {str(e)}")
+            # Trong trường hợp lỗi, coi như hỗ trợ để tránh bỏ qua các video hợp lệ
+            return True
     
     def _get_best_thumbnail(self, info: Dict[str, Any]) -> str:
         """Lấy URL thumbnail chất lượng cao nhất từ thông tin video"""
