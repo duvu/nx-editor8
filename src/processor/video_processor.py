@@ -44,6 +44,7 @@ Phiên bản: 1.0
 
 import re
 import time
+import random
 from typing import Dict, Any, List, Tuple, Optional
 from ..logger import logger
 from ..video_search import VideoSearch
@@ -336,17 +337,60 @@ def add_additional_videos(
             logger.info(f"Adding new video: {new_url}")
             
             # Tạo dòng mới với cấu trúc phù hợp (URL + tham số)
-            # Format: URL,10-20,crop:0-0-1920-1080,excludes=1-5;30-35
-            # Tạo các tham số mặc định
-            default_time_range = "5-11"  # Chọn 6 giây từ 5-11s của video
-            default_crop = "crop:300-0-1920-820"  # Cắt khung hình theo yêu cầu: 300-0-1920-820
+            # Format: URL,10-16;25-31;40-46,crop:300-0-1920-820,excludes=0-10;16-25;31-40;46-60
             
-            # Tạo danh sách excludes mặc định (loại bỏ 5 giây đầu và phần còn lại của video sau 11s)
-            # Giả định video dài ít nhất 20 giây
-            default_excludes = "excludes=0-5;11-20"
+            # Giả định video có độ dài khoảng 60 giây
+            video_duration = 60
+            
+            # Tạo 3 đoạn thời gian ngẫu nhiên, mỗi đoạn 6 giây
+            segments = []
+            
+            # Đảm bảo đoạn đầu tiên bắt đầu từ giây thứ 5 trở đi để tránh phần intro
+            start1 = random.randint(5, 15)
+            end1 = start1 + 6
+            segments.append((start1, end1))
+            
+            # Đoạn thứ hai bắt đầu từ giữa video
+            start2 = random.randint(end1 + 5, 35)
+            end2 = start2 + 6
+            segments.append((start2, end2))
+            
+            # Đoạn thứ ba bắt đầu gần cuối nhưng tránh outro
+            start3 = random.randint(end2 + 5, 45)
+            end3 = start3 + 6
+            segments.append((start3, end3))
+            
+            # Sắp xếp các đoạn theo thứ tự thời gian
+            segments.sort()
+            
+            # Tạo chuỗi thời gian theo định dạng "start1-end1;start2-end2;start3-end3"
+            time_ranges = ";".join([f"{start}-{end}" for start, end in segments])
+            
+            # Tạo danh sách excludes để loại bỏ các khoảng giữa các đoạn đã chọn
+            excludes = []
+            
+            # Loại bỏ phần đầu (0s đến đoạn đầu tiên)
+            if segments[0][0] > 0:
+                excludes.append(f"0-{segments[0][0]}")
+                
+            # Loại bỏ các khoảng giữa các đoạn
+            for i in range(len(segments) - 1):
+                excludes.append(f"{segments[i][1]}-{segments[i+1][0]}")
+                
+            # Loại bỏ phần cuối (từ đoạn cuối đến hết)
+            excludes.append(f"{segments[-1][1]}-{video_duration}")
+            
+            # Tạo chuỗi excludes
+            excludes_str = "excludes=" + ";".join(excludes)
+            
+            # Khung hình cắt theo yêu cầu
+            crop = "crop:300-0-1920-820"
             
             # Tạo dòng URL hoàn chỉnh với tham số
-            formatted_url = f"{new_url},{default_time_range},{default_crop},{default_excludes}"
+            formatted_url = f"{new_url},{time_ranges},{crop},{excludes_str}"
+            
+            logger.debug(f"Created video URL with time segments: {time_ranges}")
+            logger.debug(f"Excludes: {excludes_str}")
             
             # Thêm dòng mới
             new_lines = []
