@@ -338,12 +338,12 @@ def add_additional_videos(
             # Tạo dòng mới với cấu trúc phù hợp (URL + tham số)
             # Format: URL,10-20,crop:0-0-1920-1080,excludes=1-5;30-35
             # Tạo các tham số mặc định
-            default_time_range = "5-35"  # Chọn 30 giây từ 5-35s của video
-            default_crop = "crop:0-0-1920-1080"  # Không cắt, sử dụng khung hình đầy đủ
+            default_time_range = "5-11"  # Chọn 6 giây từ 5-11s của video
+            default_crop = "crop:300-0-1920-820"  # Cắt khung hình theo yêu cầu: 300-0-1920-820
             
-            # Tạo danh sách excludes mặc định (loại bỏ 5 giây đầu và 5 giây cuối)
-            duration = 40  # Giả định video dài ít nhất 40 giây
-            default_excludes = f"excludes=0-5;{duration-5}-{duration}"
+            # Tạo danh sách excludes mặc định (loại bỏ 5 giây đầu và phần còn lại của video sau 11s)
+            # Giả định video dài ít nhất 20 giây
+            default_excludes = "excludes=0-5;11-20"
             
             # Tạo dòng URL hoàn chỉnh với tham số
             formatted_url = f"{new_url},{default_time_range},{default_crop},{default_excludes}"
