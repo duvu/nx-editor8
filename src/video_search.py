@@ -16,7 +16,9 @@ from urllib.parse import urlparse, parse_qs, quote_plus
 
 import requests
 import yt_dlp
-from nx_setup import logger
+from .logger import logger
+
+
 
 class VideoSearch:
     """

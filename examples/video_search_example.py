@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Import VideoSearch từ module src
 from src.video_search import VideoSearch
-from nx_setup import logger
+from src.logger import logger
 
 # Thiết lập mức log thành DEBUG
 logger.set_level("DEBUG")
