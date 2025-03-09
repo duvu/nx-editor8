@@ -12,6 +12,9 @@ from duckduckgo_search import DDGS
 from .logger import logger
 from urllib.parse import urlparse, parse_qs, quote
 
+# Thiết lập mức log của logger thành DEBUG
+logger.set_level('DEBUG')
+
 class VideoSearch:
     """
     Lớp hỗ trợ tìm kiếm và xử lý video từ YouTube và các nền tảng khác.
@@ -115,7 +118,16 @@ class VideoSearch:
             
             # Log kết quả tìm kiếm
             logger.debug(f"DuckDuckGo returned {len(duck_results)} results, {len(valid_results)} from supported platforms")
+            # Ghi logs kết quả tìm kiếm từ DuckDuckGo
+            logger.info(f"DuckDuckGo trả về {len(duck_results)} kết quả cho từ khóa '{query}'")
             
+            for i, result in enumerate(valid_results):
+                logger.debug(f"Kết quả {i+1}:")
+                logger.debug(f"- Tiêu đề: {result.get('title', 'Không có tiêu đề')}")
+                logger.debug(f"- URL: {result.get('url', 'Không có URL')}")
+                logger.debug(f"- Thời lượng: {result.get('duration', 'Không xác định')}")
+                logger.debug(f"- Thumbnail: {result.get('image', 'Không có thumbnail')}")
+                logger.debug(f"- Mô tả: {result.get('description', 'Không có mô tả')}")
             # Kết quả cuối cùng
             results = []
             
@@ -238,7 +250,16 @@ class VideoSearch:
                 ))
             
             logger.info(f"DuckDuckGo returned {len(results)} video results")
+            # Ghi logs kết quả tìm kiếm
+            logger.info(f"DuckDuckGo trả về {len(results)} kết quả cho từ khóa '{query}'")
             
+            for i, result in enumerate(results):
+                logger.debug(f"Kết quả {i+1}:")
+                logger.debug(f"- Tiêu đề: {result.get('title', 'Không có tiêu đề')}")
+                logger.debug(f"- URL: {result.get('url', 'Không có URL')}")
+                logger.debug(f"- Thời lượng: {result.get('duration', 'Không xác định')}")
+                logger.debug(f"- Thumbnail: {result.get('image', 'Không có thumbnail')}")
+                logger.debug(f"- Mô tả: {result.get('description', 'Không có mô tả')}")
             # Log một số kết quả đầu tiên để debug
             if results:
                 for i, r in enumerate(results[:3]):
@@ -459,7 +480,16 @@ class VideoSearch:
         try:
             # Tìm kiếm trực tiếp với DuckDuckGo để tăng tốc độ
             duck_results = self.search_duckduckgo_videos(search_query, max_results=10)
+            # Ghi logs kết quả tìm kiếm từ DuckDuckGo
+            logger.info(f"DuckDuckGo trả về {len(duck_results)} kết quả cho từ khóa '{search_query}'")
             
+            for i, result in enumerate(duck_results):
+                logger.debug(f"Kết quả {i+1}:")
+                logger.debug(f"- Tiêu đề: {result.get('title', 'Không có tiêu đề')}")
+                logger.debug(f"- URL: {result.get('url', 'Không có URL')}")
+                logger.debug(f"- Thời lượng: {result.get('duration', 'Không xác định')}")
+                logger.debug(f"- Thumbnail: {result.get('image', 'Không có thumbnail')}")
+                logger.debug(f"- Mô tả: {result.get('description', 'Không có mô tả')}")
             # Lọc các URL từ nền tảng được hỗ trợ
             valid_results = [result for result in duck_results 
                            if self._is_supported_video_platform(result.get('url', ''))]

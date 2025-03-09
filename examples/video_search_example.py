@@ -19,7 +19,7 @@ def main():
     Ví dụ sử dụng VideoSearch để tìm kiếm và xử lý video
     """
     # Thiết lập logger
-    logger.set_level("INFO")
+    logger.set_level("DEBUG")
     logger.info("Bắt đầu ví dụ tìm kiếm video")
     
     try:
