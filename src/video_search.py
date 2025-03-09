@@ -458,7 +458,7 @@ class VideoSearch:
     
     def get_alternative_video(self, keywords: str) -> Optional[Dict[str, Any]]:
         """
-        Tìm video thay thế dựa trên từ khóa
+        Tìm video thay thế khi không tìm thấy video phù hợp
         
         Args:
             keywords: Từ khóa tìm kiếm
@@ -516,13 +516,18 @@ class VideoSearch:
                     selected_result = duck_results[0]
                     url = selected_result.get('url', '')
                     
+                    # Log URL đầy đủ
+                    logger.debug(f"Selected URL: {url}")
+                    
                     # Tạo thông tin video từ kết quả DuckDuckGo
                     platform = "Unknown"
                     parsed_url = urlparse(url)
                     domain = parsed_url.netloc.lower()
                     logger.debug(f"Using domain: {domain}")
                     
-                    embed_url = url  # Sử dụng URL gốc nếu không thể tạo URL nhúng
+                    # Sử dụng URL gốc cho cả URL thông thường và URL nhúng
+                    embed_url = self._get_embed_url_from_regular_url(url)
+                    logger.debug(f"Generated embed URL: {embed_url}")
                     
                     # Chuyển đổi thời lượng từ string "MM:SS" sang số giây
                     duration_str = selected_result.get('duration', '0:00')
@@ -538,11 +543,19 @@ class VideoSearch:
                     except Exception as e:
                         logger.debug(f"Error parsing duration '{duration_str}': {str(e)}")
                     
+                    # Tạo URL thumbnail nếu không có
+                    thumbnail = selected_result.get('image', '')
+                    if not thumbnail and 'youtube' in domain:
+                        video_id = self._extract_youtube_id(url)
+                        if video_id:
+                            thumbnail = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+                            logger.debug(f"Generated YouTube thumbnail: {thumbnail}")
+                    
                     video_info = {
                         'url': url,
                         'title': selected_result.get('title', 'Unknown Title'),
                         'description': selected_result.get('description', ''),
-                        'thumbnail': selected_result.get('image', ''),
+                        'thumbnail': thumbnail,
                         'duration': duration,
                         'view_count': 0,
                         'upload_date': '',
@@ -565,20 +578,12 @@ class VideoSearch:
             # Tạo thông tin video từ kết quả DuckDuckGo
             url = selected_result.get('url', '')
             platform = self._get_platform_from_url(url)
-            embed_url = self._get_embed_url(url, {})
+            embed_url = self._get_embed_url_from_regular_url(url)
             
             # Tạo thumbnail URL cho YouTube từ URL video
             thumbnail = selected_result.get('image', '')
             if not thumbnail and 'youtube' in platform.lower():
-                video_id = None
-                parsed_url = urlparse(url)
-                
-                if 'youtube.com' in parsed_url.netloc and 'v=' in url:
-                    query_params = parse_qs(parsed_url.query)
-                    video_id = query_params.get('v', [None])[0]
-                elif 'youtu.be' in parsed_url.netloc:
-                    video_id = parsed_url.path.strip('/')
-                
+                video_id = self._extract_youtube_id(url)
                 if video_id:
                     thumbnail = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
             
@@ -620,6 +625,98 @@ class VideoSearch:
             logger.error(f"Stack trace: {traceback.format_exc()}")
             return None
     
+    def _get_embed_url_from_regular_url(self, url: str) -> str:
+        """
+        Chuyển đổi URL thông thường thành URL nhúng
+        
+        Args:
+            url: URL thông thường của video
+            
+        Returns:
+            URL nhúng
+        """
+        if not url:
+            return ""
+            
+        try:
+            parsed_url = urlparse(url)
+            domain = parsed_url.netloc.lower()
+            
+            # YouTube
+            if 'youtube.com' in domain or 'youtu.be' in domain:
+                video_id = self._extract_youtube_id(url)
+                if video_id:
+                    return f"https://www.youtube.com/embed/{video_id}"
+                    
+            # Vimeo
+            elif 'vimeo.com' in domain:
+                video_id = url.split('/')[-1]
+                if video_id.isdigit():
+                    return f"https://player.vimeo.com/video/{video_id}"
+                    
+            # Dailymotion
+            elif 'dailymotion.com' in domain:
+                video_id = url.split('/')[-1].split('_')[0]
+                return f"https://www.dailymotion.com/embed/video/{video_id}"
+                
+            # Facebook
+            elif 'facebook.com' in domain:
+                if 'watch' in url:
+                    return url.replace('watch', 'plugins/video.php') + "&show_text=0"
+                else:
+                    return url
+                    
+            # TikTok
+            elif 'tiktok.com' in domain:
+                return f"https://www.tiktok.com/embed/v2/{url.split('/')[-1]}"
+                
+            # Mặc định trả về URL gốc
+            logger.debug(f"No special embed URL handling for domain {domain}, using original URL")
+            return url
+                
+        except Exception as e:
+            logger.error(f"Error creating embed URL from {url}: {str(e)}")
+            return url
+            
+    def _extract_youtube_id(self, url: str) -> Optional[str]:
+        """
+        Trích xuất ID video YouTube từ URL
+        
+        Args:
+            url: URL YouTube
+            
+        Returns:
+            ID video YouTube hoặc None nếu không tìm thấy
+        """
+        if not url:
+            return None
+            
+        try:
+            parsed_url = urlparse(url)
+            
+            # youtu.be/<id>
+            if parsed_url.netloc == 'youtu.be':
+                return parsed_url.path[1:]
+                
+            # youtube.com/watch?v=<id>
+            if parsed_url.netloc in ('youtube.com', 'www.youtube.com'):
+                query = parse_qs(parsed_url.query)
+                if 'v' in query:
+                    return query['v'][0]
+                    
+            # youtube.com/v/<id>
+            if parsed_url.path.startswith('/v/'):
+                return parsed_url.path.split('/')[2]
+                
+            # youtube.com/embed/<id>
+            if parsed_url.path.startswith('/embed/'):
+                return parsed_url.path.split('/')[2]
+                
+            return None
+        except Exception as e:
+            logger.error(f"Error extracting YouTube ID from {url}: {str(e)}")
+            return None
+    
     def get_embed_html(self, video_info: Dict[str, Any], width: int = 640, height: int = 360) -> str:
         """
         Tạo mã HTML để nhúng video
@@ -633,23 +730,67 @@ class VideoSearch:
             Mã HTML để nhúng video
         """
         embed_url = video_info.get('embed_url', '')
+        url = video_info.get('url', '')
+        
+        if not embed_url and url:
+            # Tạo embed URL từ URL thông thường nếu không có sẵn
+            embed_url = self._get_embed_url_from_regular_url(url)
+            logger.debug(f"Generated embed URL from regular URL: {embed_url}")
+        
         if not embed_url:
             logger.warning(f"No embed URL available for video: {video_info.get('title', 'Unknown')}")
-            return ""
+            
+            # Tạo mã HTML để hiển thị thông tin video khi không có URL nhúng
+            thumbnail = video_info.get('thumbnail', '')
+            title = video_info.get('title', 'Unknown Video')
+            
+            # Tạo mã HTML hiển thị hình ảnh và tiêu đề thay vì video
+            fallback_html = f"""
+            <div style="width: {width}px; height: {height}px; border: 1px solid #ccc; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #f9f9f9; text-align: center; padding: 10px; box-sizing: border-box;">
+                {f'<img src="{thumbnail}" alt="{title}" style="max-width: 90%; max-height: 70%; object-fit: contain; margin-bottom: 10px;">' if thumbnail else ''}
+                <h3 style="margin: 5px 0; font-family: Arial, sans-serif;">{title}</h3>
+                <p style="margin: 5px 0; font-family: Arial, sans-serif; font-size: 12px;">URL: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a></p>
+                <p style="color: #666; font-family: Arial, sans-serif; font-size: 12px;">Video không có sẵn mã nhúng</p>
+            </div>
+            """
+            
+            logger.debug(f"Created fallback HTML for video without embed URL")
+            return fallback_html
         
         platform = video_info.get('platform', '').lower()
         
-        # Tạo mã HTML dựa trên nền tảng
+        # YouTube
         if 'youtube' in platform:
             return f'<iframe width="{width}" height="{height}" src="{embed_url}" frameborder="0" allowfullscreen></iframe>'
+            
+        # Vimeo
         elif 'vimeo' in platform:
-            return f'<iframe width="{width}" height="{height}" src="{embed_url}" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>'
+            return f'<iframe src="{embed_url}" width="{width}" height="{height}" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>'
+            
+        # Facebook
         elif 'facebook' in platform:
-            return f'<iframe width="{width}" height="{height}" src="{embed_url}" frameborder="0" allowfullscreen></iframe>'
+            return f'<iframe src="{embed_url}" width="{width}" height="{height}" style="border:none;overflow:hidden" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>'
+            
+        # Instagram
+        elif 'instagram' in platform:
+            return f'<iframe width="{width}" height="{height}" src="{embed_url}" frameborder="0" scrolling="no" allowtransparency="true"></iframe>'
+            
+        # TikTok
+        elif 'tiktok' in platform:
+            return f'<blockquote class="tiktok-embed" cite="{url}" data-video-id="{url.split("/")[-1]}" style="max-width: {width}px; min-width: 325px;"><section></section></blockquote><script async src="https://www.tiktok.com/embed.js"></script>'
+            
+        # Twitter
+        elif 'twitter' in platform or 'x.com' in platform:
+            tweet_id = url.split('/')[-1]
+            return f'<blockquote class="twitter-tweet" data-width="{width}" data-dnt="true"><a href="{url}"></a></blockquote><script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>'
+            
+        # Dailymotion
         elif 'dailymotion' in platform:
-            return f'<iframe width="{width}" height="{height}" src="{embed_url}" frameborder="0" allowfullscreen></iframe>'
-        else:
-            return f'<iframe width="{width}" height="{height}" src="{embed_url}" frameborder="0" allowfullscreen></iframe>'
+            return f'<iframe frameborder="0" width="{width}" height="{height}" src="{embed_url}" allowfullscreen allow="autoplay"></iframe>'
+        
+        # Mặc định nếu không có xử lý đặc biệt
+        logger.debug(f"Using default iframe for platform: {platform}")
+        return f'<iframe width="{width}" height="{height}" src="{embed_url}" frameborder="0" allowfullscreen></iframe>'
     
     def _is_supported_video_platform(self, url: str) -> bool:
         """Kiểm tra xem URL có phải từ nền tảng video được hỗ trợ không"""
