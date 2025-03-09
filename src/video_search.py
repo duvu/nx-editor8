@@ -3,6 +3,7 @@ import re
 import json
 import time
 import random
+import traceback
 import requests
 import datetime
 from typing import List, Dict, Any, Optional, Tuple, Union
@@ -118,7 +119,7 @@ class VideoSearch:
             # Kết quả cuối cùng
             results = []
             
-            # THAY ĐỔI: Sử dụng trực tiếp thông tin từ DuckDuckGo thay vì gọi yt-dlp cho mỗi URL
+            # Sử dụng trực tiếp thông tin từ DuckDuckGo mà không cần yt-dlp
             for i, result in enumerate(valid_results[:max_results * 2]):
                 try:
                     url = result.get('url', '')
@@ -146,14 +147,30 @@ class VideoSearch:
                     platform = self._get_platform_from_url(url)
                     embed_url = self._get_embed_url(url, {})
                     
+                    # Tạo thumbnail URL cho YouTube từ URL video (không cần yt-dlp)
+                    thumbnail = result.get('image', '')
+                    if not thumbnail and 'youtube' in platform.lower():
+                        # Trích xuất ID video từ URL (nếu có thể)
+                        video_id = None
+                        parsed_url = urlparse(url)
+                        
+                        if 'youtube.com' in parsed_url.netloc and 'v=' in url:
+                            query_params = parse_qs(parsed_url.query)
+                            video_id = query_params.get('v', [None])[0]
+                        elif 'youtu.be' in parsed_url.netloc:
+                            video_id = parsed_url.path.strip('/')
+                        
+                        if video_id:
+                            thumbnail = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+                    
                     video_info = {
                         'url': url,
                         'title': result.get('title', 'Unknown Title'),
                         'description': result.get('description', ''),
-                        'thumbnail': result.get('image', ''),
+                        'thumbnail': thumbnail,
                         'duration': duration,
                         'view_count': 0,  # Không có trong kết quả DuckDuckGo
-                        'upload_date': '',  # Không có trong kết quả DuckDuckGo
+                        'upload_date': '',
                         'channel': result.get('content', '').split(' by ')[-1] if result.get('content', '') else 'Unknown',
                         'channel_url': '',
                         'embed_url': embed_url,
@@ -162,33 +179,9 @@ class VideoSearch:
                         'source': 'duckduckgo'
                     }
                     
-                    # Kiểm tra thời lượng nếu có
-                    if duration > 0:
-                        # Nếu có thời lượng, kiểm tra phạm vi
-                        if self.min_duration <= duration <= self.max_duration:
-                            logger.debug(f"Video with valid duration ({duration}s) added: {video_info.get('title', url)}")
-                            results.append(video_info)
-                        else:
-                            logger.debug(f"Video duration out of range ({duration}s): {video_info.get('title', url)}")
-                    else:
-                        # Nếu không có thời lượng, vẫn chấp nhận video
-                        logger.debug(f"Video without duration accepted: {video_info.get('title', url)}")
-                        results.append(video_info)
-                    
-                    # FALLBACK: Chỉ khi cần thông tin chi tiết mà DuckDuckGo không cung cấp
-                    # và chỉ cho một số kết quả đầu tiên để tăng tốc độ
-                    if i < 3 and (not video_info.get('duration') or not video_info.get('thumbnail')):
-                        try:
-                            logger.debug(f"Trying to enrich metadata for {url} using yt-dlp")
-                            detailed_info = self.get_video_info(url)
-                            if detailed_info:
-                                # Chỉ cập nhật các trường còn thiếu
-                                for key, value in detailed_info.items():
-                                    if not video_info.get(key) and value:
-                                        video_info[key] = value
-                                logger.debug(f"Metadata enriched for {url}")
-                        except Exception as e:
-                            logger.debug(f"Failed to enrich metadata: {str(e)}")
+                    # Luôn chấp nhận video, không cần kiểm tra thời lượng hay metadata
+                    logger.debug(f"Added video: {video_info.get('title', url)}")
+                    results.append(video_info)
                 
                 except Exception as e:
                     logger.warning(f"Error processing DuckDuckGo result {url}: {str(e)}")
@@ -457,23 +450,84 @@ class VideoSearch:
         
         logger.info(f"Searching for alternative video with keywords: '{keywords}'")
         
-        # Thêm "HD" vào từ khóa để có video chất lượng cao
+        # Thêm "HD" vào từ khóa nếu chưa có
         if "HD" not in keywords.upper():
             search_query = f"{keywords} HD"
         else:
             search_query = keywords
         
-        # Tìm kiếm video
-        videos = self.search_videos(search_query, max_results=5)
-        
-        # Trả về video ngẫu nhiên hoặc None nếu không tìm thấy
-        if videos:
-            selected_video = random.choice(videos)
-            logger.info(f"Selected alternative video: {selected_video.get('title')}")
-            return selected_video
-        
-        logger.warning(f"No alternative videos found for keywords: '{keywords}'")
-        return None
+        try:
+            # Tìm kiếm trực tiếp với DuckDuckGo để tăng tốc độ
+            duck_results = self.search_duckduckgo_videos(search_query, max_results=10)
+            
+            # Lọc các URL từ nền tảng được hỗ trợ
+            valid_results = [result for result in duck_results 
+                           if self._is_supported_video_platform(result.get('url', ''))]
+            
+            if not valid_results:
+                logger.warning(f"No valid video results found for keywords: '{keywords}'")
+                return None
+                
+            # Chọn ngẫu nhiên một video
+            selected_result = random.choice(valid_results)
+            
+            # Tạo thông tin video từ kết quả DuckDuckGo
+            url = selected_result.get('url', '')
+            platform = self._get_platform_from_url(url)
+            embed_url = self._get_embed_url(url, {})
+            
+            # Tạo thumbnail URL cho YouTube từ URL video
+            thumbnail = selected_result.get('image', '')
+            if not thumbnail and 'youtube' in platform.lower():
+                video_id = None
+                parsed_url = urlparse(url)
+                
+                if 'youtube.com' in parsed_url.netloc and 'v=' in url:
+                    query_params = parse_qs(parsed_url.query)
+                    video_id = query_params.get('v', [None])[0]
+                elif 'youtu.be' in parsed_url.netloc:
+                    video_id = parsed_url.path.strip('/')
+                
+                if video_id:
+                    thumbnail = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+            
+            # Chuyển đổi thời lượng từ string "MM:SS" sang số giây
+            duration_str = selected_result.get('duration', '0:00')
+            duration = 0
+            
+            try:
+                if duration_str:
+                    parts = duration_str.split(':')
+                    if len(parts) == 2:  # MM:SS
+                        duration = int(parts[0]) * 60 + int(parts[1])
+                    elif len(parts) == 3:  # H:MM:SS
+                        duration = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            except Exception as e:
+                logger.debug(f"Error parsing duration '{duration_str}': {str(e)}")
+            
+            video_info = {
+                'url': url,
+                'title': selected_result.get('title', 'Unknown Title'),
+                'description': selected_result.get('description', ''),
+                'thumbnail': thumbnail,
+                'duration': duration,
+                'view_count': 0,
+                'upload_date': '',
+                'channel': selected_result.get('content', '').split(' by ')[-1] if selected_result.get('content', '') else 'Unknown',
+                'channel_url': '',
+                'embed_url': embed_url,
+                'platform': platform,
+                'resolution': 0,
+                'source': 'duckduckgo'
+            }
+            
+            logger.info(f"Selected alternative video: {video_info.get('title')}")
+            return video_info
+            
+        except Exception as e:
+            logger.error(f"Error getting alternative video: {str(e)}")
+            logger.error(f"Stack trace: {traceback.format_exc()}")
+            return None
     
     def get_embed_html(self, video_info: Dict[str, Any], width: int = 640, height: int = 360) -> str:
         """
