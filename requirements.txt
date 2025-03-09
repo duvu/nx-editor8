@@ -19,3 +19,6 @@ pillow==11.1.0
 # DuckDuckGo search dependencies
 primp==0.14.0
 duckduckgo_search==7.5.0
+
+# Video processing
+yt-dlp==2024.3.10
