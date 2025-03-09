@@ -7,8 +7,8 @@ Module chuyển đổi kịch bản thành định dạng JSON
 
 import time
 import traceback
-from .logger import logger
-from .script2json import script2json
+from ..logger import logger
+from ..script2json import script2json
 
 def s2j_processor(data):
     """

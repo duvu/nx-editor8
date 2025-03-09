@@ -5,7 +5,7 @@
 Module xử lý bài viết để trích xuất nội dung và tiêu đề
 """
 
-from .logger import logger
+from ..logger import logger
 
 def extract_article(message):
     """

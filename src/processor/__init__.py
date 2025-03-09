@@ -2,10 +2,9 @@
 # -*- coding: utf-8 -*-
 
 """
-Module tập hợp tất cả các processor để xử lý dữ liệu
+Package chứa tất cả các processor để xử lý dữ liệu văn bản, hình ảnh và JSON
 """
 
-# Import các processor từ các module riêng biệt
 from .article_processor import extract_article
 from .image_processor import image_processor
 from .script_processor import script_processor

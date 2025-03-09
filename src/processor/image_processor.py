@@ -7,8 +7,8 @@ Module xử lý và xác thực hình ảnh trong bài viết
 
 import re
 import time
-from .logger import logger
-from .image_search import ImageSearch
+from ..logger import logger
+from ..image_search import ImageSearch
 
 def image_processor(data):
     """
