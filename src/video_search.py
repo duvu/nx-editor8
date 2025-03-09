@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Optional, Tuple, Union
 import yt_dlp
 from duckduckgo_search import DDGS
 from .logger import logger
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 
 class VideoSearch:
     """
@@ -33,19 +33,20 @@ class VideoSearch:
             'format': 'best[height<=720]',
             'quiet': True,
             'no_warnings': True,
-            'extract_flat': True,
+            'extract_flat': 'in_playlist',
             'skip_download': True,
             'ignoreerrors': True,
             'nocheckcertificate': True,
             'no_color': True,
-            'socket_timeout': 10,  # Timeout sau 10 giây
+            'socket_timeout': 5,  # Timeout giảm xuống 5 giây
             'geo_bypass': True,
+            'age_limit': 21,  # Bỏ qua giới hạn tuổi
         }
         
         # Yêu cầu tối thiểu cho video
-        self.min_duration = 30  # Thời lượng tối thiểu (giây)
-        self.max_duration = 600  # Thời lượng tối đa (giây)
-        self.min_resolution = 360  # Độ phân giải tối thiểu (px)
+        self.min_duration = 10  # Giảm thời lượng tối thiểu xuống 10 giây
+        self.max_duration = 1800  # Tăng thời lượng tối đa lên 30 phút
+        self.min_resolution = 240  # Giảm độ phân giải tối thiểu
         
         # Danh sách các đuôi URL của các nền tảng hỗ trợ
         self.supported_platforms = [
@@ -80,35 +81,128 @@ class VideoSearch:
             search_query = f"{keywords} video"
         else:
             search_query = keywords
-            
-        # Tìm kiếm trên DuckDuckGo
+        
+        # Tìm kiếm với DuckDuckGo
         try:
-            duck_results = self.search_duckduckgo_videos(search_query, max_results * 2)
-            duck_urls = [result.get('url') for result in duck_results if self._is_supported_video_platform(result.get('url'))]
+            logger.info(f"Searching DuckDuckGo for: '{search_query}'")
+            results = self._search_with_duckduckgo(search_query, max_results)
+            logger.info(f"Found {len(results)} suitable videos for query: '{keywords}'")
+            return results
+        except Exception as e:
+            logger.error(f"Error in video search: {str(e)}")
+            logger.error(f"Stack trace: {traceback.format_exc()}")
+            return []
+    
+    def _search_with_duckduckgo(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
+        """
+        Tìm kiếm video với DuckDuckGo và trích xuất thông tin
+        
+        Args:
+            query: Từ khóa tìm kiếm
+            max_results: Số lượng kết quả tối đa
+            
+        Returns:
+            Danh sách video
+        """
+        try:
+            # Lấy kết quả từ DuckDuckGo
+            duck_results = self.search_duckduckgo_videos(query, max_results * 2)
+            
+            # Lọc các URL từ nền tảng được hỗ trợ
+            valid_results = [result for result in duck_results 
+                           if self._is_supported_video_platform(result.get('url', ''))]
             
             # Log kết quả tìm kiếm
-            logger.debug(f"Found {len(duck_urls)} potential video URLs from DuckDuckGo")
+            logger.debug(f"DuckDuckGo returned {len(duck_results)} results, {len(valid_results)} from supported platforms")
             
-            # Lấy thông tin chi tiết về video
+            # Kết quả cuối cùng
             results = []
-            for url in duck_urls[:max_results * 2]:  # Giới hạn số lượng URL để xử lý
-                video_info = self.get_video_info(url)
-                if video_info:
-                    # Chỉ chọn video có thời lượng phù hợp
-                    duration = video_info.get('duration', 0)
-                    if self.min_duration <= duration <= self.max_duration:
-                        results.append(video_info)
-                        logger.debug(f"Added video: {video_info.get('title')} ({duration}s)")
-                    
-                    # Dừng khi đã có đủ kết quả
-                    if len(results) >= max_results:
-                        break
             
-            logger.info(f"Found {len(results)} suitable videos for query: '{keywords}'")
+            # THAY ĐỔI: Sử dụng trực tiếp thông tin từ DuckDuckGo thay vì gọi yt-dlp cho mỗi URL
+            for i, result in enumerate(valid_results[:max_results * 2]):
+                try:
+                    url = result.get('url', '')
+                    if not url:
+                        continue
+                        
+                    logger.debug(f"Processing DuckDuckGo result {i+1}/{len(valid_results)}: {url}")
+                    
+                    # Trích xuất thông tin từ kết quả DuckDuckGo
+                    # Chuyển đổi thời lượng từ string "MM:SS" hoặc "H:MM:SS" sang số giây
+                    duration_str = result.get('duration', '0:00')
+                    duration = 0
+                    
+                    try:
+                        if duration_str:
+                            parts = duration_str.split(':')
+                            if len(parts) == 2:  # MM:SS
+                                duration = int(parts[0]) * 60 + int(parts[1])
+                            elif len(parts) == 3:  # H:MM:SS
+                                duration = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+                    except Exception as e:
+                        logger.debug(f"Error parsing duration '{duration_str}': {str(e)}")
+                    
+                    # Tạo đối tượng video từ kết quả DuckDuckGo
+                    platform = self._get_platform_from_url(url)
+                    embed_url = self._get_embed_url(url, {})
+                    
+                    video_info = {
+                        'url': url,
+                        'title': result.get('title', 'Unknown Title'),
+                        'description': result.get('description', ''),
+                        'thumbnail': result.get('image', ''),
+                        'duration': duration,
+                        'view_count': 0,  # Không có trong kết quả DuckDuckGo
+                        'upload_date': '',  # Không có trong kết quả DuckDuckGo
+                        'channel': result.get('content', '').split(' by ')[-1] if result.get('content', '') else 'Unknown',
+                        'channel_url': '',
+                        'embed_url': embed_url,
+                        'platform': platform,
+                        'resolution': 0,
+                        'source': 'duckduckgo'
+                    }
+                    
+                    # Kiểm tra thời lượng nếu có
+                    if duration > 0:
+                        # Nếu có thời lượng, kiểm tra phạm vi
+                        if self.min_duration <= duration <= self.max_duration:
+                            logger.debug(f"Video with valid duration ({duration}s) added: {video_info.get('title', url)}")
+                            results.append(video_info)
+                        else:
+                            logger.debug(f"Video duration out of range ({duration}s): {video_info.get('title', url)}")
+                    else:
+                        # Nếu không có thời lượng, vẫn chấp nhận video
+                        logger.debug(f"Video without duration accepted: {video_info.get('title', url)}")
+                        results.append(video_info)
+                    
+                    # FALLBACK: Chỉ khi cần thông tin chi tiết mà DuckDuckGo không cung cấp
+                    # và chỉ cho một số kết quả đầu tiên để tăng tốc độ
+                    if i < 3 and (not video_info.get('duration') or not video_info.get('thumbnail')):
+                        try:
+                            logger.debug(f"Trying to enrich metadata for {url} using yt-dlp")
+                            detailed_info = self.get_video_info(url)
+                            if detailed_info:
+                                # Chỉ cập nhật các trường còn thiếu
+                                for key, value in detailed_info.items():
+                                    if not video_info.get(key) and value:
+                                        video_info[key] = value
+                                logger.debug(f"Metadata enriched for {url}")
+                        except Exception as e:
+                            logger.debug(f"Failed to enrich metadata: {str(e)}")
+                
+                except Exception as e:
+                    logger.warning(f"Error processing DuckDuckGo result {url}: {str(e)}")
+                
+                # Dừng khi đã có đủ kết quả
+                if len(results) >= max_results:
+                    break
+            
+            logger.info(f"DuckDuckGo provided {len(results)} usable video results")
             return results
             
         except Exception as e:
-            logger.error(f"Error searching videos: {str(e)}")
+            logger.error(f"Error in _search_with_duckduckgo: {str(e)}")
+            logger.error(f"Stack trace: {traceback.format_exc()}")
             return []
     
     def search_duckduckgo_videos(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
@@ -125,18 +219,43 @@ class VideoSearch:
         try:
             logger.info(f"Searching DuckDuckGo for videos: '{query}'")
             
-            # Sử dụng DuckDuckGo để tìm kiếm video
-            results = list(self.ddgs.videos(
-                keywords=query,
-                max_results=max_results,
-                safesearch="moderate"
-            ))
+            # Sử dụng DuckDuckGo để tìm kiếm video - thử với các cấp độ safesearch khác nhau
+            try:
+                # Thử với safesearch=Off
+                results = list(self.ddgs.videos(
+                    keywords=query,
+                    max_results=max_results,
+                    safesearch="off"
+                ))
+                
+                # Nếu không có kết quả, thử lại với moderate
+                if not results:
+                    logger.debug("No results with safesearch=off, trying with moderate")
+                    results = list(self.ddgs.videos(
+                        keywords=query,
+                        max_results=max_results,
+                        safesearch="moderate"
+                    ))
+            except Exception as e:
+                logger.warning(f"Error with specific safesearch setting: {e}")
+                # Fallback to default
+                results = list(self.ddgs.videos(
+                    keywords=query,
+                    max_results=max_results
+                ))
             
             logger.info(f"DuckDuckGo returned {len(results)} video results")
+            
+            # Log một số kết quả đầu tiên để debug
+            if results:
+                for i, r in enumerate(results[:3]):
+                    logger.debug(f"DDG result {i+1}: {r.get('title')} - {r.get('url')}")
+            
             return results
             
         except Exception as e:
             logger.error(f"Error searching DuckDuckGo videos: {str(e)}")
+            logger.error(f"Stack trace: {traceback.format_exc()}")
             return []
     
     def get_video_info(self, url: str) -> Optional[Dict[str, Any]]:
@@ -156,43 +275,126 @@ class VideoSearch:
         logger.debug(f"Getting info for video URL: {url}")
         
         try:
-            with yt_dlp.YoutubeDL(self.ytdlp_options) as ydl:
-                info = ydl.extract_info(url, download=False)
-                
-                # Kiểm tra nếu không lấy được thông tin
-                if not info:
-                    logger.warning(f"Could not extract info from {url}")
-                    return None
-                
-                # Kiểm tra nếu là playlist
-                if 'entries' in info:
-                    # Lấy video đầu tiên trong playlist
-                    if not info['entries']:
+            # Thêm tùy chọn extra_verbose cho debug chi tiết hơn
+            options = {**self.ytdlp_options}
+            
+            with yt_dlp.YoutubeDL(options) as ydl:
+                try:
+                    # Lấy thông tin cơ bản trước
+                    basic_info = ydl.extract_info(url, download=False, process=False)
+                    
+                    if not basic_info:
+                        logger.warning(f"Could not extract basic info from {url}")
                         return None
-                    info = info['entries'][0]
-                
-                # Tạo đối tượng thông tin video
-                video_info = {
-                    'url': url,
-                    'title': info.get('title', 'Unknown Title'),
-                    'description': info.get('description', ''),
-                    'thumbnail': self._get_best_thumbnail(info),
-                    'duration': info.get('duration', 0),
-                    'view_count': info.get('view_count', 0),
-                    'upload_date': self._format_date(info.get('upload_date', '')),
-                    'channel': info.get('uploader', 'Unknown'),
-                    'channel_url': info.get('uploader_url', ''),
-                    'embed_url': self._get_embed_url(url, info),
-                    'resolution': self._get_max_resolution(info),
-                    'format': info.get('format', ''),
-                    'platform': self._get_platform_from_url(url)
-                }
-                
-                logger.debug(f"Successfully extracted info for video: {video_info['title']}")
-                return video_info
+                    
+                    # Nếu là playlist, lấy video đầu tiên
+                    if 'entries' in basic_info:
+                        if not basic_info['entries']:
+                            logger.warning("Playlist has no entries")
+                            return None
+                            
+                        # Lấy URL của video đầu tiên
+                        if '_type' in basic_info and basic_info['_type'] == 'playlist':
+                            first_entry = basic_info['entries'][0]
+                            if 'url' in first_entry:
+                                logger.debug(f"Processing first video in playlist: {first_entry.get('url')}")
+                                return self.get_video_info(first_entry['url'])
+                            else:
+                                logger.warning("First entry in playlist has no URL")
+                                return None
+                    
+                    # Lấy thông tin đầy đủ
+                    try:
+                        info = ydl.extract_info(url, download=False)
+                    except Exception as e:
+                        logger.warning(f"Error extracting full info: {str(e)}")
+                        # Sử dụng thông tin cơ bản nếu không lấy được thông tin đầy đủ
+                        info = basic_info
+                    
+                    # Chuẩn bị dữ liệu video
+                    video_info = {
+                        'url': url,
+                        'title': info.get('title', 'Unknown Title'),
+                        'description': info.get('description', ''),
+                        'thumbnail': self._get_best_thumbnail(info),
+                        'duration': info.get('duration', 0),
+                        'view_count': info.get('view_count', 0),
+                        'upload_date': self._format_date(info.get('upload_date', '')),
+                        'channel': info.get('uploader', 'Unknown'),
+                        'channel_url': info.get('uploader_url', ''),
+                        'embed_url': self._get_embed_url(url, info),
+                        'resolution': self._get_max_resolution(info),
+                        'format': info.get('format', ''),
+                        'platform': self._get_platform_from_url(url)
+                    }
+                    
+                    logger.debug(f"Successfully extracted info for video: {video_info['title']} (duration: {video_info['duration']}s)")
+                    return video_info
+                    
+                except yt_dlp.utils.DownloadError as e:
+                    logger.warning(f"yt-dlp download error for {url}: {str(e)}")
+                    # Tạo metadata tối thiểu từ URL
+                    return self._create_minimal_video_info(url)
                 
         except Exception as e:
             logger.error(f"Error getting video info for {url}: {str(e)}")
+            logger.error(f"Stack trace: {traceback.format_exc()}")
+            return None
+    
+    def _create_minimal_video_info(self, url: str) -> Optional[Dict[str, Any]]:
+        """
+        Tạo thông tin tối thiểu cho video khi không thể lấy đầy đủ
+        
+        Args:
+            url: URL của video
+            
+        Returns:
+            Thông tin cơ bản về video
+        """
+        logger.debug(f"Creating minimal video info for: {url}")
+        
+        try:
+            platform = self._get_platform_from_url(url)
+            
+            # Trích xuất ID video từ URL (nếu có thể)
+            video_id = None
+            parsed_url = urlparse(url)
+            
+            if 'youtube.com' in parsed_url.netloc and 'v=' in url:
+                video_id = parse_qs(parsed_url.query).get('v', [None])[0]
+            elif 'youtu.be' in parsed_url.netloc:
+                video_id = parsed_url.path.strip('/')
+            
+            # Tạo thumbnail URL cho YouTube
+            thumbnail = ""
+            if video_id and ('youtube' in platform.lower() or 'youtu.be' in url):
+                thumbnail = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+            
+            # Tạo URL nhúng
+            embed_url = self._get_embed_url(url, {})
+            
+            # Tạo tiêu đề từ URL
+            path_parts = parsed_url.path.split('/')
+            title_part = path_parts[-1] if path_parts else ""
+            title = title_part.replace('-', ' ').replace('_', ' ').capitalize() or f"Video on {platform}"
+            
+            return {
+                'url': url,
+                'title': title,
+                'description': '',
+                'thumbnail': thumbnail,
+                'duration': 0,  # Không có thông tin thời lượng
+                'view_count': 0,
+                'channel': platform,
+                'channel_url': '',
+                'embed_url': embed_url,
+                'platform': platform,
+                'resolution': 0,
+                'format': '',
+                'upload_date': ''
+            }
+        except Exception as e:
+            logger.error(f"Error creating minimal video info: {str(e)}")
             return None
     
     def is_video_url_accessible(self, url: str, timeout: int = 10) -> bool:
@@ -256,7 +458,7 @@ class VideoSearch:
         logger.info(f"Searching for alternative video with keywords: '{keywords}'")
         
         # Thêm "HD" vào từ khóa để có video chất lượng cao
-        if "HD" not in keywords:
+        if "HD" not in keywords.upper():
             search_query = f"{keywords} HD"
         else:
             search_query = keywords
