@@ -335,10 +335,23 @@ def add_additional_videos(
                 
             logger.info(f"Adding new video: {new_url}")
             
+            # Tạo dòng mới với cấu trúc phù hợp (URL + tham số)
+            # Format: URL,10-20,crop:0-0-1920-1080,excludes=1-5;30-35
+            # Tạo các tham số mặc định
+            default_time_range = "5-35"  # Chọn 30 giây từ 5-35s của video
+            default_crop = "crop:0-0-1920-1080"  # Không cắt, sử dụng khung hình đầy đủ
+            
+            # Tạo danh sách excludes mặc định (loại bỏ 5 giây đầu và 5 giây cuối)
+            duration = 40  # Giả định video dài ít nhất 40 giây
+            default_excludes = f"excludes=0-5;{duration-5}-{duration}"
+            
+            # Tạo dòng URL hoàn chỉnh với tham số
+            formatted_url = f"{new_url},{default_time_range},{default_crop},{default_excludes}"
+            
             # Thêm dòng mới
             new_lines = []
             new_lines.append("")  # Dòng trống trước video
-            new_lines.append(new_url)
+            new_lines.append(formatted_url)
             
             # Thêm mã nhúng HTML nếu có
             if 'embed_html' in alt_video:
