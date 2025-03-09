@@ -339,26 +339,51 @@ def add_additional_videos(
             # Tạo dòng mới với cấu trúc phù hợp (URL + tham số)
             # Format: URL,10-16;25-31;40-46,crop:300-0-1920-820,excludes=0-10;16-25;31-40;46-60
             
-            # Giả định video có độ dài khoảng 60 giây
-            video_duration = 60
+            # Lấy thời lượng thực tế từ video nếu có, nếu không thì sử dụng giá trị mặc định là 60s
+            video_duration = alt_video.get('duration', 60)
+            logger.debug(f"Video duration: {video_duration} seconds")
+            
+            # Đảm bảo video_duration là một số hợp lệ và > 20 giây
+            try:
+                video_duration = int(video_duration)
+                if video_duration < 20:
+                    video_duration = 60  # Nếu video quá ngắn, sử dụng giá trị mặc định
+            except (ValueError, TypeError):
+                video_duration = 60  # Nếu không chuyển đổi được, sử dụng giá trị mặc định
+                
+            logger.debug(f"Using video duration: {video_duration} seconds for segment calculation")
+            
+            # Giới hạn thời lượng tối đa để tránh vùng outro (thường ở cuối video)
+            max_end_time = min(video_duration - 5, 120)  # Giới hạn tối đa 120s hoặc trước outro 5s
             
             # Tạo 3 đoạn thời gian ngẫu nhiên, mỗi đoạn 6 giây
             segments = []
             
-            # Đảm bảo đoạn đầu tiên bắt đầu từ giây thứ 5 trở đi để tránh phần intro
-            start1 = random.randint(5, 15)
-            end1 = start1 + 6
+            # Đảm bảo các đoạn không vượt quá thời lượng video
+            # Đoạn đầu tiên bắt đầu từ giây thứ 5 trở đi để tránh phần intro
+            max_start1 = min(video_duration // 4, 15)  # 1/4 đầu video hoặc tối đa 15s
+            start1 = random.randint(5, max_start1)
+            end1 = min(start1 + 6, max_end_time)
             segments.append((start1, end1))
             
             # Đoạn thứ hai bắt đầu từ giữa video
-            start2 = random.randint(end1 + 5, 35)
-            end2 = start2 + 6
+            max_start2 = min(video_duration // 2, 45)  # Nửa video hoặc tối đa 45s
+            start2 = random.randint(end1 + 5, max_start2)
+            end2 = min(start2 + 6, max_end_time)
             segments.append((start2, end2))
             
             # Đoạn thứ ba bắt đầu gần cuối nhưng tránh outro
-            start3 = random.randint(end2 + 5, 45)
-            end3 = start3 + 6
+            max_start3 = min(video_duration * 3 // 4, 90)  # 3/4 video hoặc tối đa 90s
+            start3 = random.randint(end2 + 5, max_start3)
+            end3 = min(start3 + 6, max_end_time)
             segments.append((start3, end3))
+            
+            # Loại bỏ các segment không hợp lệ (nếu video quá ngắn)
+            segments = [(start, end) for start, end in segments if start < end and end <= max_end_time]
+            
+            # Nếu không có segment nào hợp lệ, tạo một segment mặc định
+            if not segments:
+                segments = [(5, 11)]
             
             # Sắp xếp các đoạn theo thứ tự thời gian
             segments.sort()
