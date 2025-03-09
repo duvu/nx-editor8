@@ -5,7 +5,6 @@
 Module cung cấp chức năng tìm kiếm video YouTube bằng yt-dlp
 """
 
-import os
 import re
 import json
 import random

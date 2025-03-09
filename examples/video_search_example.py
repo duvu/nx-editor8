@@ -5,7 +5,6 @@
 Ví dụ sử dụng VideoSearch để tìm kiếm video YouTube
 """
 
-import os
 import sys
 import time
 from pathlib import Path

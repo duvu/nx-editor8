@@ -147,7 +147,7 @@ class Logger:
     Tích hợp rotation, lọc dữ liệu nhạy cảm, và nhiều tính năng khác.
     """
     
-    def __init__(self, name: str = 'nx-editor8', level: Union[str, int] = 'INFO'):
+    def __init__(self, name: str = 'nx-editor8', level: Union[str, int] = 'DEBUG'):
         """
         Khởi tạo logger với tên và level chỉ định.
         
