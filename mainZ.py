@@ -16,7 +16,7 @@ from src.logger import logger
 from src.config import INPUT_QUEUE, OUTPUT_QUEUE, PROCESSOR_ID, get_log_level
 from src.image_search import ImageSearch
 # Import các processor từ package mới
-from src.processor import extract_article, image_processor, script_processor, s2j_processor
+from src.processor import extract_article, image_processor, script_processor, s2j_processor, video_processor
 
 # Make sure the working directory is correctly set
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -70,6 +70,9 @@ def create_complete_pipeline():
     
     logger.debug("Adding image_processor to pipeline")
     chain.add_processor(image_processor, "image_processor")
+    
+    logger.debug("Adding video_processor to pipeline")
+    chain.add_processor(video_processor, "video_processor")
     
     logger.debug("Adding script_processor to pipeline")
     chain.add_processor(script_processor, "script_processor")
