@@ -8,7 +8,7 @@ import traceback
 from typing import Any, Callable, Dict, List, Optional, Union
 import pika
 from dotenv import load_dotenv
-from .chained_processor import ProcessorChain
+from .processor_chain import ProcessorChain
 from .logger import logger
 
 # Load environment variables

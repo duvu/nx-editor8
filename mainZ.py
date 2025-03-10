@@ -10,7 +10,7 @@ from datetime import datetime
 
 # Update imports to reference the src directory
 from src.script2json import script2json
-from src.chained_processor import ProcessorChain
+from src.processor_chain import ProcessorChain
 from src.rabbitmq_processor import ChainedRabbitMQProcessor
 from src.logger import logger
 from src.config import INPUT_QUEUE, OUTPUT_QUEUE, PROCESSOR_ID, get_log_level
