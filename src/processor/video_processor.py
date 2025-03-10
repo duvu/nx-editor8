@@ -160,31 +160,10 @@ def process_video_url(
                 new_line = new_url
                 logger.debug(f"Replaced URL: {new_line}")
             
-            # Thêm mã nhúng HTML
-            if 'embed_html' in alt_video:
-                embed_line = f"EMBED:{alt_video['embed_html']}"
-                logger.debug(f"Added embed HTML after video URL")
-                return f"{new_line}\n{embed_line}", True
-            
+            # Bỏ phần thêm mã nhúng HTML
             return new_line, True
         else:
             logger.warning(f"Failed to find alternative video for '{keywords}'")
-    
-    # Nếu URL khả dụng, thêm mã nhúng HTML
-    elif url:
-        try:
-            # Lấy thông tin video
-            video_info = video_searcher.get_video_info(url)
-            
-            # Nếu có thông tin video, thêm mã nhúng
-            if video_info:
-                embed_html = video_searcher.get_embed_html(video_info)
-                if embed_html:
-                    embed_line = f"EMBED:{embed_html}"
-                    logger.debug(f"Added embed HTML for existing video URL")
-                    return f"{url}\n{embed_line}", False
-        except Exception as e:
-            logger.warning(f"Error generating embed code for {url}: {str(e)}")
     
     # Trả về dòng ban đầu nếu không cần thay thế
     return url if len(url_parts) == 1 else f"{url},{url_parts[1]}", False
@@ -421,11 +400,6 @@ def add_additional_videos(
             new_lines = []
             new_lines.append("")  # Dòng trống trước video
             new_lines.append(formatted_url)
-            
-            # Thêm mã nhúng HTML nếu có
-            if 'embed_html' in alt_video:
-                embed_line = f"EMBED:{alt_video['embed_html']}"
-                new_lines.append(embed_line)
             
             # Chèn vào vị trí đã xác định
             lines[insert_position:insert_position] = new_lines
