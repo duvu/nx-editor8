@@ -121,15 +121,10 @@ Năm 2025, mang theo nhiều kỳ vọng nhưng cũng không ít lo ngại, về
 
 def save_output(data, output_file=None):
     """Lưu kết quả ra file"""
-    # Tạo tên file mặc định nếu không chỉ định
-    if not output_file:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(project_root, f"output_{timestamp}.json")
+    # Luôn sử dụng sample2.json làm file đầu ra
+    output_file = os.path.join(project_root, "sample2.json")
     
     logger.info(f"Lưu kết quả ra file: {output_file}")
-    
-    # Đảm bảo đường dẫn thư mục tồn tại
-    os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
     
     # Lưu ra file
     with open(output_file, 'w', encoding='utf-8') as f:
@@ -175,11 +170,9 @@ def display_summary(result, input_data):
 
 def main():
     """Hàm chính của chương trình"""
-    # Chỉ giữ lại tùy chọn đầu ra
+    # Chỉ giữ lại tùy chọn trợ giúp
     parser = argparse.ArgumentParser(description="Chạy chuỗi xử lý processor cục bộ")
-    # Không còn tùy chọn file đầu vào 
-    # parser.add_argument("input_file", nargs="?", help="File đầu vào (tùy chọn)")
-    parser.add_argument("-o", "--output", help="File đầu ra (tùy chọn)")
+    parser.add_argument("-h", "--help", action="help", help="Hiển thị thông báo trợ giúp này và thoát")
     args = parser.parse_args()
     
     start_time = time.time()
@@ -207,8 +200,8 @@ def main():
         # Hiển thị tóm tắt kết quả
         display_summary(result, input_data)
         
-        # Lưu kết quả
-        output_file = save_output(result, args.output)
+        # Lưu kết quả vào sample2.json
+        output_file = save_output(result)
         logger.info(f"Đã lưu kết quả tại: {output_file}")
         
     except Exception as e:
