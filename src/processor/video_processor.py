@@ -277,15 +277,48 @@ def add_additional_videos(
     logger.info(f"Adding additional videos to reach minimum of {min_videos} videos")
     
     # Tìm vị trí thích hợp để thêm video
-    # Ưu tiên thêm vào cuối bài viết, trước các phần tử # hoặc ## (phần kết luận)
-    insert_position = len(lines)
-    for i in range(len(lines) - 1, -1, -1):
-        if lines[i].startswith('# ') or lines[i].startswith('## '):
-            insert_position = i
-            break
+    # Thêm video vào trước phần nội dung chính
+    # Tìm các đặc điểm của phần nội dung như dòng trống, dòng đếm từ, hoặc dòng bắt đầu đoạn văn
+    insert_position = 0
+    
+    # Tìm vị trí của các URL video hiện có
+    existing_video_positions = []
+    for i, line in enumerate(lines):
+        if line.startswith('http') and is_video_url(line.split(',')[0].strip()):
+            existing_video_positions.append(i)
+    
+    if existing_video_positions:
+        # Nếu đã có video, chèn vào sau video cuối cùng hiện có
+        insert_position = existing_video_positions[-1] + 1
+        
+        # Điều chỉnh vị trí nếu ngay sau video là hình ảnh
+        while insert_position < len(lines) and lines[insert_position].startswith('http'):
+            insert_position += 1
+            
+        # Thêm một dòng trống nếu không có
+        if insert_position < len(lines) and lines[insert_position] != "":
+            lines.insert(insert_position, "")
+            insert_position += 1
+    else:
+        # Nếu không có video nào, tìm vị trí sau phần metadata và thumbnail
+        for i, line in enumerate(lines):
+            if line.startswith('-') and 'từ' in line:  # Dòng đếm từ
+                insert_position = i
+                break
+            elif i > 5 and line == "" and i+1 < len(lines) and lines[i+1] != "" and not lines[i+1].startswith(('http', '+', '#')):
+                # Dòng trống trước nội dung chính
+                insert_position = i
+                break
+    
+    # Nếu không tìm thấy vị trí thích hợp, thêm vào đầu bài viết sau phần metadata
+    if insert_position == 0:
+        for i, line in enumerate(lines):
+            if i > 3 and line == "" and i+1 < len(lines) and lines[i+1].startswith('+'):
+                insert_position = i
+                break
     
     # Số lượng video cần thêm
-    videos_to_add = min_videos - len([l for l in lines if is_video_url(l) and not l.startswith('EMBED:')])
+    videos_to_add = min_videos - len([l for l in lines if is_video_url(l.split(',')[0].strip()) and not l.startswith('EMBED:')])
     
     if videos_to_add <= 0:
         logger.info("No additional videos needed")
