@@ -66,9 +66,10 @@ def create_complete_pipeline():
     
     chain = ProcessorChain("local_pipeline")
     
-    # Thêm các bước xử lý vào pipeline
-    logger.debug("Thêm extract_article processor vào pipeline")
-    chain.add_processor(extract_article, "extract_article")
+    # Bỏ qua extract_article processor theo yêu cầu
+    # logger.debug("Thêm extract_article processor vào pipeline")
+    # chain.add_processor(extract_article, "extract_article")
+    logger.info("Bỏ qua extract_article processor theo yêu cầu")
     
     logger.debug("Thêm image_processor vào pipeline")
     chain.add_processor(image_processor, "image_processor")
@@ -89,39 +90,16 @@ def create_complete_pipeline():
     return chain
 
 def load_input_data(file_path=None):
-    """Tải dữ liệu đầu vào từ file hoặc sử dụng dữ liệu mẫu"""
-    if file_path and os.path.exists(file_path):
-        logger.info(f"Đang đọc dữ liệu từ file: {file_path}")
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-            
-        # Kiểm tra nếu file là JSON
-        if file_path.endswith('.json'):
-            try:
-                data = json.loads(content)
-                logger.info("Đã tải dữ liệu dạng JSON")
-                return data
-            except json.JSONDecodeError:
-                logger.warning("File JSON không hợp lệ, sẽ xử lý như văn bản thông thường")
-        
-        # Xử lý như bài viết văn bản
-        logger.info("Chuẩn bị dữ liệu dạng văn bản")
-        return {"article": content, "title": os.path.basename(file_path)}
-    
-    # Sử dụng dữ liệu mẫu nếu không có file đầu vào
-    logger.info("Không có file đầu vào, sử dụng dữ liệu mẫu")
+    """Tải dữ liệu đầu vào từ file sample2.txt"""
+    # Cố định đầu vào từ file sample2.txt
+    logger.info("Cố định đầu vào từ file sample2.txt")
     sample_file = os.path.join(project_root, "sample2.txt")
     
-    if os.path.exists(sample_file):
-        logger.info(f"Đang đọc dữ liệu mẫu từ: {sample_file}")
-        with open(sample_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        return {"article": content, "title": "Mẫu: Donald Trump và kinh tế toàn cầu"}
-    
-    # Dữ liệu mẫu nếu không tìm thấy file mẫu
-    logger.warning("Không tìm thấy file mẫu, sử dụng dữ liệu mẫu cứng")
-    return {
-        "article": """
+    if not os.path.exists(sample_file):
+        logger.error(f"Không tìm thấy file mẫu: {sample_file}")
+        logger.warning("Sử dụng dữ liệu mẫu cứng")
+        return {
+            "article": """
 TÀI CHÍNH KINH DOANH: 2025 - NHỮNG QUAN ĐIỂM CỦA ÔNG TRUMP SẼ ĐỊNH HÌNH LẠI TRẬT TỰ KINH TẾ TOÀN CẦU?
 
 #Donald Trump, thuế quan, chiến tranh thương mại, di cư, biên giới
@@ -131,9 +109,15 @@ TÀI CHÍNH KINH DOANH: 2025 - NHỮNG QUAN ĐIỂM CỦA ÔNG TRUMP SẼ ĐỊN
 +thumbnail:https://static.kinhtedothi.vn/w960/images/upload/2021/12/22/trump-nham-chuc-biden.png
 
 Năm 2025, mang theo nhiều kỳ vọng nhưng cũng không ít lo ngại, về những thách thức có thể định hình kinh tế toàn cầu. Từ bất ổn địa chính trị, vấn đề nhập cư đến tiến bộ công nghệ và bất bình đẳng kinh tế, thế giới đang đối mặt với hàng loạt thách thức chưa từng có.
-        """,
-        "title": "Mẫu: Donald Trump và kinh tế toàn cầu"
-    }
+            """,
+            "title": "Mẫu: Donald Trump và kinh tế toàn cầu"
+        }
+    
+    # Đọc file sample2.txt
+    logger.info(f"Đang đọc dữ liệu mẫu từ: {sample_file}")
+    with open(sample_file, 'r', encoding='utf-8') as f:
+        content = f.read()
+    return {"article": content, "title": "Donald Trump và kinh tế toàn cầu - sample2.txt"}
 
 def save_output(data, output_file=None):
     """Lưu kết quả ra file"""
@@ -191,9 +175,10 @@ def display_summary(result, input_data):
 
 def main():
     """Hàm chính của chương trình"""
-    # Tạo parser để xử lý tham số dòng lệnh
+    # Chỉ giữ lại tùy chọn đầu ra
     parser = argparse.ArgumentParser(description="Chạy chuỗi xử lý processor cục bộ")
-    parser.add_argument("input_file", nargs="?", help="File đầu vào (tùy chọn)")
+    # Không còn tùy chọn file đầu vào 
+    # parser.add_argument("input_file", nargs="?", help="File đầu vào (tùy chọn)")
     parser.add_argument("-o", "--output", help="File đầu ra (tùy chọn)")
     args = parser.parse_args()
     
@@ -201,10 +186,10 @@ def main():
     logger.info(f"===== BẮT ĐẦU XỬ LÝ LOCAL =====")
     
     try:
-        # Tải dữ liệu đầu vào
-        input_data = load_input_data(args.input_file)
+        # Tải dữ liệu đầu vào từ sample2.txt
+        input_data = load_input_data()
         
-        # Tạo pipeline xử lý
+        # Tạo pipeline xử lý (bỏ qua extract_article)
         pipeline = create_complete_pipeline()
         
         # Xử lý dữ liệu
