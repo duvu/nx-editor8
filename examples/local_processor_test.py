@@ -170,9 +170,8 @@ def display_summary(result, input_data):
 
 def main():
     """Hàm chính của chương trình"""
-    # Chỉ giữ lại tùy chọn trợ giúp
+    # Sử dụng parser đơn giản nhất
     parser = argparse.ArgumentParser(description="Chạy chuỗi xử lý processor cục bộ")
-    parser.add_argument("-h", "--help", action="help", help="Hiển thị thông báo trợ giúp này và thoát")
     args = parser.parse_args()
     
     start_time = time.time()
