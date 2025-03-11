@@ -152,61 +152,15 @@ def process_video_url(
             new_url = alt_video['url']
             logger.info(f"Found replacement video in {search_time:.2f}s: {new_url}")
             
-            # Kiểm tra thông tin kênh từ video thay thế
-            channel_name = alt_video.get('channel', '')
-            channel_id = ''
-            channel_url = alt_video.get('channel_url', '')
-            
-            # Trích xuất channel_id từ channel_url nếu có
-            if channel_url:
-                channel_id_match = re.search(r'channel/([^/?&]+)', channel_url)
-                if channel_id_match:
-                    channel_id = channel_id_match.group(1)
-                else:
-                    # Thử trích xuất từ các định dạng khác
-                    channel_id_match = re.search(r'user/([^/?&]+)', channel_url)
-                    if channel_id_match:
-                        channel_id = channel_id_match.group(1)
-            
-            logger.debug(f"Channel info - Name: {channel_name}, ID: {channel_id}, URL: {channel_url}")
-            
             # Tạo dòng mới với URL thay thế
             if len(url_parts) > 1:
-                # Kiểm tra xem đã có thông tin kênh trong url_parts hay chưa
-                params = url_parts[1].split(',')
-                has_channel_info = False
-                
-                for i, param in enumerate(params):
-                    if param.startswith('channel:'):
-                        # Thay thế thông tin kênh hiện có với thông tin mới
-                        if channel_name:
-                            channel_info = f"channel:{channel_name}"
-                            if channel_id:
-                                channel_info += f";{channel_id}"
-                            params[i] = channel_info
-                        has_channel_info = True
-                        break
-                
-                # Nếu chưa có thông tin kênh và có thông tin kênh mới thì thêm vào
-                if not has_channel_info and channel_name:
-                    channel_info = f"channel:{channel_name}"
-                    if channel_id:
-                        channel_info += f";{channel_id}"
-                    params.append(channel_info)
-                
-                new_line = f"{new_url},{','.join(params)}"
+                new_line = f"{new_url},{url_parts[1]}"
                 logger.debug(f"Replaced URL with parameters: {new_line}")
             else:
-                # Nếu không có tham số gì, thêm thông tin kênh nếu có
-                if channel_name:
-                    channel_info = f"channel:{channel_name}"
-                    if channel_id:
-                        channel_info += f";{channel_id}"
-                    new_line = f"{new_url},{channel_info}"
-                else:
-                    new_line = new_url
+                new_line = new_url
                 logger.debug(f"Replaced URL: {new_line}")
             
+            # Bỏ phần thêm mã nhúng HTML
             return new_line, True
         else:
             logger.warning(f"Failed to find alternative video for '{keywords}'")
@@ -411,24 +365,6 @@ def add_additional_videos(
                 
             logger.debug(f"Using video duration: {video_duration} seconds for segment calculation")
             
-            # Lấy và lưu trữ thông tin kênh
-            channel_name = alt_video.get('channel', '')
-            channel_id = ''
-            channel_url = alt_video.get('channel_url', '')
-            
-            # Trích xuất channel_id từ channel_url nếu có
-            if channel_url:
-                channel_id_match = re.search(r'channel/([^/?&]+)', channel_url)
-                if channel_id_match:
-                    channel_id = channel_id_match.group(1)
-                else:
-                    # Thử trích xuất từ các định dạng khác
-                    channel_id_match = re.search(r'user/([^/?&]+)', channel_url)
-                    if channel_id_match:
-                        channel_id = channel_id_match.group(1)
-            
-            logger.debug(f"Channel info - Name: {channel_name}, ID: {channel_id}, URL: {channel_url}")
-            
             # Giới hạn thời lượng tối đa để tránh vùng outro (thường ở cuối video)
             max_end_time = min(video_duration - 5, 120)  # Giới hạn tối đa 120s hoặc trước outro 5s
             
@@ -482,26 +418,21 @@ def add_additional_videos(
             excludes.append(f"{segments[-1][1]}-{video_duration}")
             
             # Tạo chuỗi excludes
-            excludes_str = f"excludes={';'.join(excludes)}"
+            excludes_str = "excludes=" + ";".join(excludes)
             
-            # Thêm thông tin kênh nếu có
-            channel_info = ""
-            if channel_name:
-                channel_info = f"channel:{channel_name}"
-                if channel_id:
-                    channel_info += f";{channel_id}"
+            # Khung hình cắt theo yêu cầu
+            crop = "crop:300-0-1920-820"
             
-            # Tạo dòng URL đầy đủ với tham số
-            new_line = f"{alt_video['url']},{time_ranges},crop:0-0-1920-1080,{excludes_str}"
-            if channel_info:
-                new_line += f",{channel_info}"
+            # Tạo dòng URL hoàn chỉnh với tham số
+            formatted_url = f"{new_url},{time_ranges},{crop},{excludes_str}"
             
-            logger.info(f"Adding new video: {alt_video['url']}")
+            logger.debug(f"Created video URL with time segments: {time_ranges}")
+            logger.debug(f"Excludes: {excludes_str}")
             
-            # Tạo dòng mới
+            # Thêm dòng mới
             new_lines = []
             new_lines.append("")  # Dòng trống trước video
-            new_lines.append(new_line)
+            new_lines.append(formatted_url)
             
             # Chèn vào vị trí đã xác định
             lines[insert_position:insert_position] = new_lines

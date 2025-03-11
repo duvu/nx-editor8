@@ -11,7 +11,6 @@ def parse_media_line(line: str) -> dict:
     Examples:
       - Image: https://...jpg,scroll:duration=10;x_speed=25;y_speed=0;direction=right
       - Video: https://youtu.be/abc,10-30,crop:100-0-1920-1080,excludes=91-1000;3000-3600
-      - Video with channel: https://youtu.be/abc,10-30,channel:Channel Name;channel_id
       
     Returns a dictionary with the necessary information.
     """
@@ -34,8 +33,6 @@ def parse_media_line(line: str) -> dict:
         "crop": None,
         "excludes": [],
         "effect": {},
-        "channel_name": None,  # Thêm trường channel_name
-        "channel_id": None,    # Thêm trường channel_id
     }
     
     for p in parts[1:]:
@@ -51,17 +48,6 @@ def parse_media_line(line: str) -> dict:
                 if '-' in pair:
                     s, e = map(int, pair.split('-'))
                     media_obj["excludes"].append({"start": s, "end": e})
-        elif p.startswith('channel:'):
-            # Xử lý thông tin channel
-            channel_info = p.replace('channel:', '').strip()
-            if ';' in channel_info:
-                parts = channel_info.split(';', 1)
-                media_obj["channel_name"] = parts[0].strip()
-                media_obj["channel_id"] = parts[1].strip()
-                logger.debug(f"Parsed channel info: name={media_obj['channel_name']}, id={media_obj['channel_id']}")
-            else:
-                media_obj["channel_name"] = channel_info
-                logger.debug(f"Parsed channel name: {media_obj['channel_name']}")
         elif ':' in p:
             key, val = p.split(':', 1)
             key = key.strip()
