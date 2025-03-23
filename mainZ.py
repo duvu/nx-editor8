@@ -1,200 +1,231 @@
+import json
 import sys
 import time
 import signal
 import random
 import os
-import traceback
-from datetime import datetime
-from typing import Dict, Any, Optional, Union, Callable, List, TypeVar, cast, Tuple
+import re
 
 # Update imports to reference the src directory
-from src.processor_chain import ProcessorChain
+from src.script2json import script2json
+from src.chained_processor import ProcessorChain
 from src.rabbitmq_processor import ChainedRabbitMQProcessor
 from src.logger import logger
 from src.config import INPUT_QUEUE, OUTPUT_QUEUE, PROCESSOR_ID, get_log_level
-from src.processor import extract_article, image_processor, script_processor, s2j_processor, video_processor
+from src.image_search import ImageSearch
 
 # Make sure the working directory is correctly set
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.append(current_dir)
-    logger.debug(f"Added {current_dir} to sys.path")
 
-# Initialize application start time for logs
-START_TIME = datetime.now()
-logger.info(f"Application starting at {START_TIME.strftime('%Y-%m-%d %H:%M:%S')}")
-logger.info(f"Running from directory: {current_dir}")
-logger.info(f"Python version: {sys.version}")
-
-# Type aliases for better readability
-MessageType = TypeVar('MessageType', Dict[str, Any], Any)
-ProcessorFunction = Callable[[MessageType], MessageType]
-
-# Pipeline configuration - makes it easy to modify the pipeline
-PIPELINE_CONFIG: List[Tuple[ProcessorFunction, str]] = [
-    (extract_article, "extract_article"),
-    (image_processor, "image_processor"),
-    (video_processor, "video_processor"),
-    (script_processor, "script_processor"),
-    (s2j_processor, "script2json")
-]
-
-def create_error_info(error: Exception, processor_name: str) -> Dict[str, Any]:
-    """Create error information dictionary for tracking.
-    
-    Args:
-        error: The exception that was raised.
-        processor_name: Name of the processor where the error occurred.
-        
-    Returns:
-        Dict[str, Any]: Dictionary containing error details.
-    """
-    error_id = f"ERR-{int(time.time())}-{random.randint(1000, 9999)}"
-    logger.error(f"Error ID: {error_id}")
-    
-    return {
-        "error_id": error_id,
-        "processor": processor_name,
-        "error": str(error),
-        "timestamp": time.time(),
-        "error_type": type(error).__name__
-    }
-
-def error_handler(message: MessageType, error: Exception, processor_name: str) -> Optional[Dict[str, Any]]:
-    """Handle errors in processors.
-    
-    Args:
-        message: The message being processed when the error occurred.
-        error: The exception that was raised.
-        processor_name: Name of the processor where the error occurred.
-        
-    Returns:
-        Optional[Dict[str, Any]]: The original message with added error information if message is a dict,
-            None if the message is not a dict.
-    """
+def error_handler(message, error, processor_name):
+    """Handle errors in processors"""
     logger.info(f"Starting error_handler for processor: {processor_name}")
     logger.error(f"Error occurred in {processor_name}: {str(error)}")
-    logger.error(f"Error stack trace: {traceback.format_exc()}")
     
-    # Log additional information about the message for debugging
     if isinstance(message, dict):
-        keys = list(message.keys())
-        logger.debug(f"Message keys available: {keys}")
-        
-        # Get error tracking information
-        error_info = create_error_info(error, processor_name)
-        
-        # Cast to Dict to satisfy type checker
-        message_dict = cast(Dict[str, Any], message)
-        message_dict["processing_error"] = error_info
-        
-        logger.info(f"Added error information to message with error_id: {error_info['error_id']}")
-        return message_dict  # Continue with error information added
+        message["processing_error"] = {
+            "processor": processor_name,
+            "error": str(error),
+            "timestamp": time.time()
+        }
+        return message  # Continue with error information added
     
-    logger.warning(f"Message is not a dict, cannot add error information. Type: {type(message)}")
     return None  # Drop the message if it's not a dict
 
-def create_complete_pipeline() -> ProcessorChain:
-    """Create and configure the complete processing pipeline.
+def extract_article(message):
+    """Extract article and title from message"""
+    logger.info("Starting extract_article processor")
+    # extract article from message. It's the field "article"
+    article = message.get("article", "")
+    title = message.get("title", "")  # Extract the title
+    if not article:
+        logger.error("No article found in message")
+        return None
+    return {"article": article, "title": title}  # Return both as a dictionary
+
+def image_validator_processor(data):
+    """Check and replace unreachable image URLs in the article"""
+    logger.info("Starting image validator processor")
     
-    Returns:
-        ProcessorChain: A configured processing pipeline with all processors added.
-    """
-    logger.info(f"Creating processing pipeline for processor ID: {PROCESSOR_ID}")
+    # Extract article and title from the input data
+    article = data["article"]
+    title = data["title"]
     
+    # Initialize image search helper
+    image_searcher = ImageSearch()
+    
+    # Extract keywords from the script (lines starting with #)
+    keywords = ""
+    lines = article.strip().split('\n')
+    for line in lines:
+        if line.startswith('#'):
+            keywords = line.strip('#').strip()
+            break
+    
+    # If no keywords found, use title instead of default
+    if not keywords:
+        keywords = title if title else "generic images"
+        logger.info(f"No keywords found, using title: {keywords}")
+    
+    logger.info(f"Extracted keywords: {keywords}")
+    
+    # Process each line and replace unreachable image URLs
+    modified_lines = []
+    for line in lines:
+        if line.startswith('http://') or line.startswith('https://'):
+            # Extract the URL part (before any comma)
+            url_parts = line.split(',', 1)
+            url = url_parts[0].strip()
+            
+            # Check if this URL is an image (not a video)
+            is_image = bool(re.search(r'\.(jpg|jpeg|png|gif|bmp|webp|tiff|svg)(\?|$|#)', url.lower()))
+            
+            # For images, check if URL is accessible
+            if is_image and not image_searcher.is_url_accessible(url):
+                logger.warning(f"Image URL not accessible: {url}")
+                
+                # Get alternative image based on keywords
+                new_url = image_searcher.get_alternative_image(keywords)
+                
+                if new_url:
+                    logger.info(f"Replacing with alternative image: {new_url}")
+                    
+                    # Replace the URL in the original line
+                    if len(url_parts) > 1:
+                        line = f"{new_url},{url_parts[1]}"
+                    else:
+                        line = new_url
+                    
+                    # Removed comment about original unreachable image
+            
+        modified_lines.append(line)
+    
+    # Join lines back into a single string
+    data["article"] = '\n'.join(modified_lines)
+    return data
+
+def script_processor(data):
+    """Perform additional script processing"""
+    logger.info("Starting script processor")
+    
+    # Extract article and title
+    article = data["article"]
+    title = data["title"]
+    
+    # Count existing image lines
+    lines = article.strip().split('\n')
+    image_lines = [line for line in lines if line.startswith('http://') or line.startswith('https://')]
+    image_count = len(image_lines)
+    
+    logger.info(f"Found {image_count} image lines in the article")
+    
+    # If we have fewer than 5 images, add more
+    if image_count < 5:
+        # Extract keywords from the script (lines starting with #)
+        keywords = ""
+        for line in lines:
+            if line.startswith('#'):
+                keywords = line.strip('#').strip()
+                break
+        
+        # If no keywords found, use title instead of default
+        if not keywords:
+            keywords = title if title else "generic images"
+            logger.info(f"No keywords found, using title: {keywords}")
+        
+        logger.info(f"Using keywords '{keywords}' to find additional images")
+        
+        # Initialize image search helper
+        image_searcher = ImageSearch()
+        
+        # Add new image lines
+        new_images_needed = 5 - image_count
+        added_images = []
+        
+        for i in range(new_images_needed):
+            new_url = image_searcher.get_alternative_image(keywords)
+            if new_url:
+                added_images.append(new_url)
+                logger.info(f"Added new image: {new_url}")
+        
+        # Insert new image lines after existing images or at the end if no images exist
+        if image_lines:
+            # Find the position of the last image line
+            last_img_pos = 0
+            for i, line in enumerate(lines):
+                if line.startswith('http://') or line.startswith('https://'):
+                    last_img_pos = i
+            
+            # Add new images after the last image line (removed comment)
+            for i, img in enumerate(added_images):
+                lines.insert(last_img_pos + 1 + i, img)
+        else:
+            # If no images exist, add them at the end (removed comment)
+            lines.extend(added_images)
+        
+        # Join lines back into a single string
+        data["article"] = '\n'.join(lines)
+        logger.info(f"Added {len(added_images)} new images to reach minimum of 5 images")
+    
+    return data
+
+def s2j_processor(data):
+    """Convert script to JSON format"""
+    logger.info("Starting script2json processor")
+    return script2json(data["article"])
+
+def create_complete_pipeline():
     chain = ProcessorChain("complete_pipeline")
-    
-    # Add all processors from configuration
-    for processor_func, processor_name in PIPELINE_CONFIG:
-        logger.debug(f"Adding {processor_name} to pipeline")
-        chain.add_processor(processor_func, processor_name)
-    
-    logger.debug("Setting error handler")
+    chain.add_processor(extract_article, "extract_article")
+    chain.add_processor(image_validator_processor, "image_validator_processor")
+    chain.add_processor(script_processor, "script_processor")
+    chain.add_processor(s2j_processor, "script2json")
     chain.set_error_handler(error_handler)
-    
-    logger.info("Complete processing pipeline created successfully")
     return chain
 
-def run_processor(input_queue: str = "chain_input", output_queue: Optional[str] = None) -> Union[ChainedRabbitMQProcessor, bool]:
-    """Initialize and run the RabbitMQ processor.
-    
-    Args:
-        input_queue: Name of the input queue to consume messages from.
-            Defaults to "chain_input".
-        output_queue: Name of the output queue to publish processed
-            messages to. Defaults to None.
-            
-    Returns:
-        Union[ChainedRabbitMQProcessor, bool]: The processor instance if successful,
-            False if connection failed.
-    """
-    logger.info(f"Initializing processor with input queue: '{input_queue}', output queue: '{output_queue}'")
-    
+def run_processor(input_queue="chain_input", output_queue=None):
     # Create RabbitMQ processor
     processor = ChainedRabbitMQProcessor()
     
     # Connect to RabbitMQ
-    logger.info("Attempting to connect to RabbitMQ...")
     if not processor.connect():
         logger.critical("Failed to connect to RabbitMQ. Exiting.")
         return False
     
-    # Create processing pipeline
-    pipeline = create_complete_pipeline()
-    
     # Process queue with chain
-    logger.info(f"Setting up message processing from '{input_queue}' to '{output_queue}'")
-    processor.process_with_chain(input_queue, pipeline, output_queue)
-    logger.info(f"Successfully started processing chain from '{input_queue}' to '{output_queue}'")
-    
+    processor.process_with_chain(input_queue, create_complete_pipeline(), output_queue)
+    logger.info(f"Started processing chain from {input_queue} to {output_queue}")
     return processor
 
-def main() -> int:
-    """Main application function.
+def main():
+    logger.set_level(get_log_level())
     
-    Returns:
-        int: Exit code. 0 for success, 1 for failure.
-    """
-    # Set log level based on configuration
-    log_level = get_log_level()
-    logger.set_level(log_level)
-    logger.info(f"Set log level to: {log_level}")
+    # Use configuration values instead of hardcoded strings
+    processor = run_processor(INPUT_QUEUE, OUTPUT_QUEUE)
+
+    if not processor:
+        sys.exit(1)
     
-    # Configure shutdown signal handling
-    def handle_shutdown(sig: int, frame: Any) -> None:
-        logger.warning(f"Received signal {sig}. Shutting down...")
-        # Log shutdown time and runtime
-        run_time = datetime.now() - START_TIME
-        logger.info(f"Application shutting down after running for {run_time}")
+    def handle_shutdown(sig, frame):
+        logger.info("\nShutting down processor...")
+        processor.close()
         sys.exit(0)
     
-    # Register signals to capture
-    signal.signal(signal.SIGINT, handle_shutdown)  # Ctrl+C
-    signal.signal(signal.SIGTERM, handle_shutdown)  # kill
+    signal.signal(signal.SIGINT, handle_shutdown)
+    signal.signal(signal.SIGTERM, handle_shutdown)
     
+    logger.info(f"Chain processor '{PROCESSOR_ID}' running. Press Ctrl+C to exit.")
+    
+    # Keep main thread alive
     try:
-        # Start the message processor
-        input_queue = INPUT_QUEUE
-        output_queue = OUTPUT_QUEUE
-        
-        logger.info(f"Starting message processor with input queue '{input_queue}' and output queue '{output_queue}'")
-        processor = run_processor(input_queue, output_queue)
-        
-        if processor:
-            logger.info("Message processor started successfully. Waiting for messages...")
-            # Keep the main thread alive
-            while True:
-                time.sleep(1)
-        else:
-            logger.critical("Failed to start message processor. Exiting.")
-            return 1
-        
-    except Exception as e:
-        logger.critical(f"Unhandled exception in main: {str(e)}")
-        logger.critical(f"Traceback: {traceback.format_exc()}")
-        return 1
-        
-    return 0
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        processor.close()
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
