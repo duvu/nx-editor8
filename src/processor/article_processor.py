@@ -38,6 +38,38 @@ def extract_article(message):
         logger.error("No article found in message")
         return None
     
+    # Trích xuất nội dung từ bài viết
+    # Loại bỏ các dòng bắt đầu bằng ký tự đặc biệt và dòng trống
+    SPECIAL_CHARS = ('-', '*', '#', '+', '?', '<', '>')
+    EXCLUDED_PREFIXES = ('http://', 'https://')
+    
+    # Tách thành các dòng và bỏ qua dòng đầu tiên (tiêu đề)
+    lines = article.split('\n')[1:]
+    
+    # Lọc các dòng hợp lệ
+    content_lines = []
+    for line in lines:
+        line = line.strip()
+        if not line:  # Bỏ qua dòng trống
+            continue
+            
+        # Kiểm tra nếu dòng chứa ký tự đặc biệt
+        if any(char in line for char in SPECIAL_CHARS):
+            continue
+        if any(line.startswith(prefix) for prefix in EXCLUDED_PREFIXES):
+            continue
+            
+        content_lines.append(line)
+    
+    # Ghép các dòng lại thành nội dung hoàn chỉnh
+    content = '\n'.join(content_lines)
+    logger.info(f"Đã trích xuất nội dung: '{content}'")
+
+    # Return none if content is too short 
+    if len(content) < 100:
+        logger.error("Content is too short")
+        return None
+    
     # Log the first few lines of the article for context
     if article_length > 0:
         preview_lines = article.split('\n')[:3]

@@ -6,6 +6,9 @@ TÀI CHÍNH KINH DOANH: 2025 - NHỮNG QUAN ĐIỂM CỦA ÔNG TRUMP SẼ ĐỊN
 +description: Năm 2025, mang theo nhiều kỳ vọng nhưng cũng không ít lo ngại, về những thách thức có thể định hình kinh tế toàn cầu. Từ bất ổn địa chính trị, vấn đề nhập cư đến tiến bộ công nghệ và bất bình đẳng kinh tế, thế giới đang đối mặt với hàng loạt thách thức chưa từng có. Dưới đây là 5 thách thức lớn nhất, được dự báo sẽ tác động mạnh mẽ, đến nền kinh tế toàn cầu trong năm 2025
 +thumbnail:https://static.kinhtedothi.vn/w960/images/upload/2021/12/22/trump-nham-chuc-biden.png
 
++channel_name: Tin tức 5.1
++channel_id: UABLDF
+
 https://www.youtube.com/watch?v=vXacRCnXfb0,10-16,crop:300-0-1920-820,excludes=1-9;40-57;276-298
 
 https://static.kinhtedothi.vn/w960/images/upload/2021/12/22/trump-nham-chuc-biden.png, panning:duration=6;direction=right

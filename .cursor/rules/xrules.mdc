@@ -1,0 +1,43 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+### 1. File Length
+- Each file should **not exceed 300 lines of code**.  
+- **Exceptions**: Configuration files or **generated code** (e.g., compiled assets, auto-generated API clients).  
+
+### 2. Function Length
+- Each function should be limited to **30 lines**, excluding docstrings.  
+- If a function exceeds **30 lines**, split it into **smaller helper functions**.  
+
+### 3. Documentation
+- **Public functions** must include a **Google-style docstring** (Python) or **Javadoc** (Java).  
+- **Private functions** do not require documentation.  
+- **No inline comments** inside functions.  
+
+### 4. Naming Conventions
+- Use **English** for all variable and function names.  
+- Follow **camelCase** for variables and functions.  
+- Use **UPPER_CASE** for constants.  
+- Follow **PascalCase** for class names.  
+- Prefix **private variables** with `_` if necessary.  
+
+### 5. Code Readability
+- Use **consistent indentation and spacing**.  
+- **Avoid deeply nested loops or conditionals** → Refactor if necessary.  
+- Follow **PEP8 (Python), Google Java Style Guide (Java), or Airbnb JavaScript Style Guide**.  
+
+### 6. Error Handling & Logging
+- Always **handle exceptions properly** (do **not suppress errors**).  
+- Use **structured logging** instead of `print()`.  
+- Log **meaningful error messages** with proper context.  
+
+### 7. Code Structure
+- Follow the **Single Responsibility Principle (SRP)** → Functions should do **only one thing**.  
+- Keep functions **pure** whenever possible (avoid modifying global state).  
+
+### 8. Hard-Coding Prevention
+- **Never hard-code values inside functions**.  
+- Use **constants, environment variables, or configuration files** instead.  
+- Avoid **magic numbers**—define them as named constants.  
