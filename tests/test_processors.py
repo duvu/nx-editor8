@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 # Add the parent directory to sys.path to import the modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.script2json import script2json  # We'll mock this
+from src.utils.script2json import script2json  # We'll mock this
 from mainZ import (
     extract_article,
     image_validator_processor,

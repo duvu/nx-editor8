@@ -1,0 +1,119 @@
+{
+  "category": "# My Test Article",
+  "title": null,
+  "keyword": [],
+  "src": null,
+  "description": null,
+  "unique_id": null,
+  "ads": null,
+  "playlist": [],
+  "test": false,
+  "speaker": null,
+  "upload": [
+    "youtube"
+  ],
+  "thumbnail": null,
+  "background_music": "track_random_3",
+  "video": [
+    {
+      "media_clips": [
+        {
+          "url": "https://www.youtube.com/watch?v=6tPQ4HDhRnM",
+          "type": "video",
+          "pickes": [],
+          "crop": "300-0-1920-820",
+          "excludes": [
+            {
+              "start": 0,
+              "end": 11
+            },
+            {
+              "start": 17,
+              "end": 28
+            },
+            {
+              "start": 34,
+              "end": 41
+            },
+            {
+              "start": 47,
+              "end": 60
+            }
+          ],
+          "effect": {}
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=WSCM6wiMs-g",
+          "type": "video",
+          "pickes": [],
+          "crop": "300-0-1920-820",
+          "excludes": [
+            {
+              "start": 0,
+              "end": 7
+            },
+            {
+              "start": 13,
+              "end": 30
+            },
+            {
+              "start": 36,
+              "end": 41
+            },
+            {
+              "start": 47,
+              "end": 60
+            }
+          ],
+          "effect": {}
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=ZIQARprID1k",
+          "type": "video",
+          "pickes": [],
+          "crop": "300-0-1920-820",
+          "excludes": [
+            {
+              "start": 0,
+              "end": 15
+            },
+            {
+              "start": 21,
+              "end": 30
+            },
+            {
+              "start": 36,
+              "end": 45
+            },
+            {
+              "start": 51,
+              "end": 60
+            }
+          ],
+          "effect": {}
+        },
+        {
+          "url": "https://d20ohkaloyme4g.cloudfront.net/img/document_thumbnails/e60e0b649c6f1b2ed4de7573ca281a2e/thumb_1200_1553.png",
+          "type": "image",
+          "pickes": [],
+          "crop": null,
+          "excludes": [],
+          "effect": {}
+        },
+        {
+          "url": "https://d20ohkaloyme4g.cloudfront.net/img/document_thumbnails/e60e0b649c6f1b2ed4de7573ca281a2e/thumb_1200_1553.png",
+          "type": "image",
+          "pickes": [],
+          "crop": null,
+          "excludes": [],
+          "effect": {}
+        }
+      ],
+      "content": [
+        "This will test our image functionality as well as the script processing pipeline.",
+        "Let's see if the command-line interface works correctly."
+      ]
+    }
+  ],
+  "is_vertical": false
+}

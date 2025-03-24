@@ -3,26 +3,23 @@ import logging
 import sys
 import json
 import time
-import socket
-import platform
 from datetime import datetime
-from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler, SMTPHandler
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from logging import Filter
 from typing import Optional, Union, Dict, Any, List, Callable
 
-# Phiên bản của module logger
-__version__ = '1.1.0'
+# Version of the logger module
+__version__ = '1.2.0'
 
-# Định dạng mặc định cho logs
+# Default log formats
 DEFAULT_LOG_FORMAT = "%(asctime)s - %(levelname)s - [%(process)d:%(thread)d] - %(name)s - %(message)s"
 DEFAULT_SIMPLE_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 DEFAULT_DETAILED_FORMAT = "%(asctime)s - %(levelname)s - [%(process)d:%(thread)d] - %(name)s - %(filename)s:%(lineno)d - %(funcName)s() - %(message)s"
-DEFAULT_JSON_FORMAT = '{"time": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "pid": %(process)d, "message": "%(message)s"}'
 
-# Định dạng ngày tháng mặc định
+# Default date format
 DEFAULT_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
-# Các level logging được hỗ trợ
+# Supported log levels
 LOG_LEVELS = {
     'DEBUG': logging.DEBUG,
     'INFO': logging.INFO,
@@ -33,15 +30,15 @@ LOG_LEVELS = {
 
 class SensitiveDataFilter(Filter):
     """
-    Bộ lọc để loại bỏ dữ liệu nhạy cảm khỏi logs.
-    Ví dụ: mật khẩu, thông tin thẻ tín dụng, tokens, etc.
+    Filter to remove sensitive data from logs.
+    Example: passwords, credit card info, tokens, etc.
     """
     def __init__(self, patterns: List[str] = None):
         """
-        Khởi tạo bộ lọc với danh sách các mẫu cần lọc.
+        Initialize filter with list of patterns to filter.
         
         Args:
-            patterns: Danh sách các pattern cần che giấu, mặc định là password, token, key
+            patterns: List of patterns to mask, defaults to password, token, key
         """
         super().__init__()
         if patterns is None:
@@ -51,163 +48,103 @@ class SensitiveDataFilter(Filter):
     
     def filter(self, record: logging.LogRecord) -> bool:
         """
-        Lọc và thay thế các dữ liệu nhạy cảm trong log message.
+        Filter and replace sensitive data in log message.
         
         Args:
-            record: Bản ghi log cần lọc
+            record: Log record to filter
             
         Returns:
-            True để giữ lại bản ghi (đã được lọc), False để loại bỏ
+            True to keep the record (after filtering), False to discard
         """
         if isinstance(record.msg, str):
             for pattern in self.patterns:
-                # Tìm và thay thế các trường chứa dữ liệu nhạy cảm
-                # Mẫu regex: "password": "abc123" -> "password": "***"
-                # Hoặc password=abc123 -> password=***
+                # Find and replace fields containing sensitive data
+                # Regex pattern: "password": "abc123" -> "password": "***"
+                # Or password=abc123 -> password=***
                 record.msg = self._mask_pattern(record.msg, pattern)
         return True
     
     def _mask_pattern(self, text: str, pattern: str) -> str:
         """
-        Tìm và thay thế dữ liệu nhạy cảm trong text.
+        Find and replace sensitive data in text.
         
         Args:
-            text: Văn bản cần kiểm tra
-            pattern: Mẫu cần tìm và thay thế
+            text: Text to check
+            pattern: Pattern to find and replace
             
         Returns:
-            Văn bản đã được che giấu dữ liệu nhạy cảm
+            Text with masked sensitive data
         """
-        # Xử lý định dạng JSON: "password": "giá_trị"
+        # Handle JSON format: "password": "value"
         import re
         json_pattern = fr'["\']({pattern})["\']:\s*["\']([^"\']+)["\']'
         text = re.sub(json_pattern, fr'"\1": "***"', text, flags=re.IGNORECASE)
         
-        # Xử lý định dạng query string: password=giá_trị
+        # Handle query string format: password=value
         query_pattern = fr'({pattern})=([^&\s]+)'
         text = re.sub(query_pattern, r'\1=***', text, flags=re.IGNORECASE)
         
         return text
 
-class JsonFormatter(logging.Formatter):
-    """
-    Định dạng log message thành JSON để dễ dàng parse và phân tích.
-    """
-    def __init__(self, fmt=None, datefmt=None, style='%'):
-        """
-        Khởi tạo JSON formatter.
-        
-        Args:
-            fmt: Định dạng log
-            datefmt: Định dạng ngày tháng
-            style: Kiểu định dạng (%, {, $)
-        """
-        super().__init__(fmt, datefmt, style)
-    
-    def format(self, record: logging.LogRecord) -> str:
-        """
-        Định dạng bản ghi log thành JSON.
-        
-        Args:
-            record: Bản ghi log
-            
-        Returns:
-            Chuỗi JSON
-        """
-        log_data = {
-            'timestamp': self.formatTime(record, self.datefmt),
-            'level': record.levelname,
-            'logger': record.name,
-            'message': record.getMessage(),
-            'process': record.process,
-            'thread': record.thread,
-            'module': record.module,
-            'lineno': record.lineno,
-        }
-        
-        # Thêm exception info nếu có
-        if record.exc_info:
-            log_data['exception'] = {
-                'type': record.exc_info[0].__name__,
-                'message': str(record.exc_info[1]),
-                'traceback': self.formatException(record.exc_info)
-            }
-        
-        # Thêm các trường bổ sung nếu có
-        if hasattr(record, 'extra_data') and isinstance(record.extra_data, dict):
-            for key, value in record.extra_data.items():
-                log_data[key] = value
-                
-        return json.dumps(log_data)
-
 class Logger:
     """
     Centralized logger configuration for the application.
-    Hỗ trợ nhiều kiểu output (console, file) và định dạng logs.
-    Tích hợp rotation, lọc dữ liệu nhạy cảm, và nhiều tính năng khác.
+    Supports console and file output with rotation.
     """
     
-    def __init__(self, name: str = 'nx-editor8', level: Union[str, int] = 'DEBUG'):
+    def __init__(self, name: str = 'nx-editor8', level: Union[str, int] = 'INFO'):
         """
-        Khởi tạo logger với tên và level chỉ định.
+        Initialize logger with specified name and level.
         
         Args:
-            name: Tên logger, sử dụng trong logs
-            level: Cấp độ log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+            name: Logger name, used in logs
+            level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         """
         self.logger = logging.getLogger(name)
         self.name = name
         
-        # Convert level từ string sang int nếu cần
+        # Convert level from string to int if needed
         if isinstance(level, str):
             level = LOG_LEVELS.get(level.upper(), logging.INFO)
             
         self.logger.setLevel(level)
         self.handlers = []
         
-        # Tránh duplicate handlers
+        # Avoid duplicate handlers
         self.logger.handlers = []
         
-        # Thông tin hệ thống để debug
-        self.system_info = {
-            'hostname': socket.gethostname(),
-            'platform': platform.platform(),
-            'python': platform.python_version(),
-            'start_time': datetime.now().strftime(DEFAULT_DATE_FORMAT)
-        }
-        
-        # Mặc định thêm console handler
+        # Default: add console handler
         self.add_console_handler()
     
     def add_console_handler(self, 
                            level: Union[str, int] = 'INFO', 
-                           format_str: str = DEFAULT_LOG_FORMAT,
+                           format_str: str = DEFAULT_SIMPLE_FORMAT,
                            use_colors: bool = True) -> None:
         """
-        Thêm console handler để hiển thị logs ra màn hình.
+        Add console handler to display logs to screen.
         
         Args:
-            level: Cấp độ log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-            format_str: Định dạng log
-            use_colors: Sử dụng màu cho các level log khác nhau
+            level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+            format_str: Log format
+            use_colors: Use colors for different log levels
         """
-        # Convert level từ string sang int nếu cần
+        # Convert level from string to int if needed
         if isinstance(level, str):
             level = LOG_LEVELS.get(level.upper(), logging.INFO)
         
         console = logging.StreamHandler(sys.stdout)
         console.setLevel(level)
         
-        # Tạo formatter
+        # Create formatter
         formatter = logging.Formatter(format_str, DEFAULT_DATE_FORMAT)
         
-        # Thêm màu sắc nếu được yêu cầu
+        # Add colors if requested
         if use_colors:
             formatter = self._get_colored_formatter(format_str)
         
         console.setFormatter(formatter)
         
-        # Thêm bộ lọc dữ liệu nhạy cảm
+        # Add sensitive data filter
         console.addFilter(SensitiveDataFilter())
         
         self.logger.addHandler(console)
@@ -222,25 +159,25 @@ class Logger:
                         backup_count: int = 5,
                         encoding: str = 'utf-8') -> None:
         """
-        Thêm rotating file handler để lưu logs vào file với rotation theo kích thước.
+        Add rotating file handler to save logs to file with size-based rotation.
         
         Args:
-            filename: Đường dẫn tới file log
-            level: Cấp độ log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-            format_str: Định dạng log
-            max_bytes: Kích thước tối đa trước khi rotate (bytes)
-            backup_count: Số lượng file backup giữ lại
-            encoding: Mã hóa cho file log
+            filename: Path to log file
+            level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+            format_str: Log format
+            max_bytes: Maximum size before rotation (bytes)
+            backup_count: Number of backup files to keep
+            encoding: Encoding for log file
         """
-        # Convert level từ string sang int nếu cần
+        # Convert level from string to int if needed
         if isinstance(level, str):
             level = LOG_LEVELS.get(level.upper(), logging.INFO)
         
-        # Tạo thư mục nếu chưa tồn tại
+        # Create directory if it doesn't exist
         log_dir = os.path.dirname(os.path.abspath(filename))
         os.makedirs(log_dir, exist_ok=True)
         
-        # Tạo handler
+        # Create handler
         file_handler = RotatingFileHandler(
             filename=filename,
             maxBytes=max_bytes,
@@ -249,11 +186,11 @@ class Logger:
         )
         file_handler.setLevel(level)
         
-        # Tạo formatter
+        # Create formatter
         formatter = logging.Formatter(format_str, DEFAULT_DATE_FORMAT)
         file_handler.setFormatter(formatter)
         
-        # Thêm bộ lọc dữ liệu nhạy cảm
+        # Add sensitive data filter
         file_handler.addFilter(SensitiveDataFilter())
         
         self.logger.addHandler(file_handler)
@@ -268,25 +205,25 @@ class Logger:
                              when: str = 'midnight',
                              encoding: str = 'utf-8') -> None:
         """
-        Thêm timed rotating file handler để lưu logs vào file với rotation theo thời gian.
+        Add timed rotating file handler to save logs to file with time-based rotation.
         
         Args:
-            filename: Đường dẫn tới file log
-            level: Cấp độ log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-            format_str: Định dạng log
-            backup_count: Số lượng file backup giữ lại
-            when: Thời điểm rotate ('midnight', 'h', 'd', 'w0'-'w6')
-            encoding: Mã hóa cho file log
+            filename: Path to log file
+            level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+            format_str: Log format
+            backup_count: Number of backup files to keep
+            when: Rotation time ('midnight', 'h', 'd', 'w0'-'w6')
+            encoding: Encoding for log file
         """
-        # Convert level từ string sang int nếu cần
+        # Convert level from string to int if needed
         if isinstance(level, str):
             level = LOG_LEVELS.get(level.upper(), logging.INFO)
         
-        # Tạo thư mục nếu chưa tồn tại
+        # Create directory if it doesn't exist
         log_dir = os.path.dirname(os.path.abspath(filename))
         os.makedirs(log_dir, exist_ok=True)
         
-        # Tạo handler
+        # Create handler
         file_handler = TimedRotatingFileHandler(
             filename=filename,
             when=when,
@@ -295,243 +232,104 @@ class Logger:
         )
         file_handler.setLevel(level)
         
-        # Định dạng tên file backup
+        # Format backup filename
         file_handler.suffix = "%Y-%m-%d"
         
-        # Tạo formatter
+        # Create formatter
         formatter = logging.Formatter(format_str, DEFAULT_DATE_FORMAT)
         file_handler.setFormatter(formatter)
         
-        # Thêm bộ lọc dữ liệu nhạy cảm
+        # Add sensitive data filter
         file_handler.addFilter(SensitiveDataFilter())
         
         self.logger.addHandler(file_handler)
         self.handlers.append(file_handler)
         self.debug(f"Added daily rotating file handler to {filename} with level {logging.getLevelName(level)}")
     
-    def add_json_file_handler(self,
-                            filename: str,
-                            level: Union[str, int] = 'INFO',
-                            backup_count: int = 30,
-                            when: str = 'midnight',
-                            encoding: str = 'utf-8') -> None:
-        """
-        Thêm file handler với định dạng JSON cho logs.
-        
-        Args:
-            filename: Đường dẫn tới file log
-            level: Cấp độ log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-            backup_count: Số lượng file backup giữ lại
-            when: Thời điểm rotate ('midnight', 'h', 'd', 'w0'-'w6')
-            encoding: Mã hóa cho file log
-        """
-        # Convert level từ string sang int nếu cần
-        if isinstance(level, str):
-            level = LOG_LEVELS.get(level.upper(), logging.INFO)
-        
-        # Tạo thư mục nếu chưa tồn tại
-        log_dir = os.path.dirname(os.path.abspath(filename))
-        os.makedirs(log_dir, exist_ok=True)
-        
-        # Tạo handler
-        file_handler = TimedRotatingFileHandler(
-            filename=filename,
-            when=when,
-            backupCount=backup_count,
-            encoding=encoding
-        )
-        file_handler.setLevel(level)
-        
-        # Định dạng tên file backup
-        file_handler.suffix = "%Y-%m-%d"
-        
-        # Tạo JSON formatter
-        formatter = JsonFormatter()
-        file_handler.setFormatter(formatter)
-        
-        # Thêm bộ lọc dữ liệu nhạy cảm
-        file_handler.addFilter(SensitiveDataFilter())
-        
-        self.logger.addHandler(file_handler)
-        self.handlers.append(file_handler)
-        self.debug(f"Added JSON file handler to {filename} with level {logging.getLevelName(level)}")
-    
-    def add_dual_rotation_handler(self,
-                                filename: str,
-                                level: Union[str, int] = 'INFO',
-                                format_str: str = DEFAULT_LOG_FORMAT,
-                                max_bytes: int = 52428800,  # 50MB
-                                time_backup_count: int = 30,
-                                size_backup_count: int = 5,
-                                when: str = 'midnight',
-                                encoding: str = 'utf-8') -> None:
-        """
-        Thêm cả hai loại rotation (size và time) cho logs.
-        
-        Args:
-            filename: Đường dẫn tới file log
-            level: Cấp độ log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-            format_str: Định dạng log
-            max_bytes: Kích thước tối đa trước khi rotate (bytes)
-            time_backup_count: Số lượng file backup theo thời gian
-            size_backup_count: Số lượng file backup theo kích thước
-            when: Thời điểm rotate ('midnight', 'h', 'd', 'w0'-'w6')
-            encoding: Mã hóa cho file log
-        """
-        # Thêm cả hai loại handlers
-        time_filename = f"{filename}.time"
-        size_filename = f"{filename}.size"
-        
-        self.add_daily_file_handler(
-            time_filename, level, format_str, time_backup_count, when, encoding
-        )
-        
-        self.add_file_handler(
-            size_filename, level, format_str, max_bytes, size_backup_count, encoding
-        )
-        
-        self.debug(f"Added dual rotation handler to {filename}")
-    
-    def add_email_handler(self,
-                        mailhost: str,
-                        fromaddr: str,
-                        toaddrs: List[str],
-                        subject: str,
-                        credentials: tuple = None,
-                        secure: tuple = None,
-                        level: Union[str, int] = 'ERROR') -> None:
-        """
-        Thêm email handler để gửi log qua email.
-        
-        Args:
-            mailhost: SMTP mail host
-            fromaddr: Địa chỉ email gửi
-            toaddrs: Danh sách địa chỉ email nhận
-            subject: Chủ đề email
-            credentials: (username, password) cho SMTP
-            secure: Tuple cho secure connection
-            level: Cấp độ log kích hoạt gửi mail (thường là ERROR hoặc CRITICAL)
-        """
-        # Convert level từ string sang int nếu cần
-        if isinstance(level, str):
-            level = LOG_LEVELS.get(level.upper(), logging.ERROR)
-        
-        # Tạo handler
-        mail_handler = SMTPHandler(
-            mailhost=mailhost,
-            fromaddr=fromaddr,
-            toaddrs=toaddrs,
-            subject=subject,
-            credentials=credentials,
-            secure=secure
-        )
-        mail_handler.setLevel(level)
-        
-        # Tạo formatter chi tiết cho email
-        formatter = logging.Formatter(DEFAULT_DETAILED_FORMAT, DEFAULT_DATE_FORMAT)
-        mail_handler.setFormatter(formatter)
-        
-        self.logger.addHandler(mail_handler)
-        self.handlers.append(mail_handler)
-        self.debug(f"Added email handler to {toaddrs} with level {logging.getLevelName(level)}")
-    
     def setup_for_production(self, app_name: str, log_dir: str) -> None:
         """
-        Thiết lập cấu hình logger cho môi trường sản xuất.
+        Set up logger configuration for production environment.
         
         Args:
-            app_name: Tên ứng dụng
-            log_dir: Thư mục lưu logs
+            app_name: Application name
+            log_dir: Log directory
         """
-        # Đảm bảo thư mục log tồn tại
+        # Ensure log directory exists
         os.makedirs(log_dir, exist_ok=True)
         
-        # Xóa handlers hiện tại
+        # Clear existing handlers
         self.logger.handlers = []
         self.handlers = []
         
-        # Thêm console handler với level INFO
+        # Add console handler with INFO level
         self.add_console_handler(level='INFO', format_str=DEFAULT_SIMPLE_FORMAT)
         
-        # Thêm file handler thường xuyên rotate
+        # Add rotating file handler
         log_file = os.path.join(log_dir, f"{app_name}.log")
-        self.add_dual_rotation_handler(
+        self.add_daily_file_handler(
             filename=log_file,
             level='INFO',
             format_str=DEFAULT_LOG_FORMAT,
-            max_bytes=50*1024*1024,  # 50MB
-            time_backup_count=30,     # 30 ngày
-            size_backup_count=10      # 10 files
+            backup_count=30  # 30 days
         )
         
-        # Thêm file handler riêng cho errors
+        # Add file handler just for errors
         error_log_file = os.path.join(log_dir, f"{app_name}_error.log")
         self.add_daily_file_handler(
             filename=error_log_file,
             level='ERROR',
             format_str=DEFAULT_DETAILED_FORMAT,
-            backup_count=90  # Giữ lại 90 ngày
-        )
-        
-        # Thêm JSON handler để phân tích logs
-        json_log_file = os.path.join(log_dir, f"{app_name}_json.log")
-        self.add_json_file_handler(
-            filename=json_log_file,
-            level='INFO',
-            backup_count=30
+            backup_count=90  # Keep for 90 days
         )
         
         self.info(f"Production logging setup completed for {app_name}")
     
     def setup_for_development(self, app_name: str, log_dir: str) -> None:
         """
-        Thiết lập cấu hình logger cho môi trường phát triển.
+        Set up logger configuration for development environment.
         
         Args:
-            app_name: Tên ứng dụng
-            log_dir: Thư mục lưu logs
+            app_name: Application name
+            log_dir: Log directory
         """
-        # Đảm bảo thư mục log tồn tại
+        # Ensure log directory exists
         os.makedirs(log_dir, exist_ok=True)
         
-        # Xóa handlers hiện tại
+        # Clear existing handlers
         self.logger.handlers = []
         self.handlers = []
         
-        # Thêm console handler với level DEBUG và màu sắc
+        # Add console handler with DEBUG level and colors
         self.add_console_handler(level='DEBUG', format_str=DEFAULT_DETAILED_FORMAT, use_colors=True)
         
-        # Thêm file handler
+        # Add file handler
         log_file = os.path.join(log_dir, f"{app_name}_dev.log")
         self.add_daily_file_handler(
             filename=log_file,
             level='DEBUG',
             format_str=DEFAULT_DETAILED_FORMAT,
-            backup_count=7  # Chỉ giữ 1 tuần
+            backup_count=7  # Only keep for 1 week
         )
         
         self.info(f"Development logging setup completed for {app_name}")
     
     def _get_colored_formatter(self, format_str: str) -> logging.Formatter:
         """
-        Tạo formatter với màu sắc cho các level khác nhau.
+        Create formatter with colors for different levels.
         
         Args:
-            format_str: Định dạng log
+            format_str: Log format
             
         Returns:
-            Formatter có màu sắc
+            Formatter with colors
         """
         # ANSI color codes
         RESET = "\033[0m"
-        BLACK = "\033[30m"
         RED = "\033[31m"
         GREEN = "\033[32m"
         YELLOW = "\033[33m"
-        BLUE = "\033[34m"
-        MAGENTA = "\033[35m"
         CYAN = "\033[36m"
-        WHITE = "\033[37m"
+        MAGENTA = "\033[35m"
         BOLD = "\033[1m"
         
         class ColoredFormatter(logging.Formatter):
@@ -553,10 +351,10 @@ class Logger:
     
     def set_level(self, level: Union[int, str]) -> None:
         """
-        Đặt cấp độ log cho logger.
+        Set log level for logger.
         
         Args:
-            level: Cấp độ log (có thể là int hoặc string như 'INFO', 'DEBUG')
+            level: Log level (can be int or string like 'INFO', 'DEBUG')
         """
         if isinstance(level, str):
             level = LOG_LEVELS.get(level.upper(), logging.INFO)
@@ -566,15 +364,15 @@ class Logger:
     
     def get_level(self) -> str:
         """
-        Lấy cấp độ log hiện tại của logger.
+        Get current log level of logger.
         
         Returns:
-            Tên cấp độ log
+            Log level name
         """
         return logging.getLevelName(self.logger.level)
     
     def clear_handlers(self) -> None:
-        """Xóa tất cả handlers hiện tại."""
+        """Remove all current handlers."""
         for handler in self.logger.handlers[:]:
             handler.close()
             self.logger.removeHandler(handler)
@@ -585,8 +383,8 @@ class Logger:
         Log debug message.
         
         Args:
-            msg: Thông điệp log
-            extra: Dữ liệu bổ sung
+            msg: Log message
+            extra: Additional data
         """
         if extra is not None:
             kwargs['extra'] = {'extra_data': extra}
@@ -597,8 +395,8 @@ class Logger:
         Log info message.
         
         Args:
-            msg: Thông điệp log
-            extra: Dữ liệu bổ sung
+            msg: Log message
+            extra: Additional data
         """
         if extra is not None:
             kwargs['extra'] = {'extra_data': extra}
@@ -609,8 +407,8 @@ class Logger:
         Log warning message.
         
         Args:
-            msg: Thông điệp log
-            extra: Dữ liệu bổ sung
+            msg: Log message
+            extra: Additional data
         """
         if extra is not None:
             kwargs['extra'] = {'extra_data': extra}
@@ -621,8 +419,8 @@ class Logger:
         Log error message.
         
         Args:
-            msg: Thông điệp log
-            extra: Dữ liệu bổ sung
+            msg: Log message
+            extra: Additional data
         """
         if extra is not None:
             kwargs['extra'] = {'extra_data': extra}
@@ -633,8 +431,8 @@ class Logger:
         Log critical message.
         
         Args:
-            msg: Thông điệp log
-            extra: Dữ liệu bổ sung
+            msg: Log message
+            extra: Additional data
         """
         if extra is not None:
             kwargs['extra'] = {'extra_data': extra}
@@ -642,11 +440,11 @@ class Logger:
     
     def exception(self, msg: str, *args, extra: Dict[str, Any] = None, **kwargs) -> None:
         """
-        Log exception message với traceback.
+        Log exception message with traceback.
         
         Args:
-            msg: Thông điệp log
-            extra: Dữ liệu bổ sung
+            msg: Log message
+            extra: Additional data
         """
         if extra is not None:
             kwargs['extra'] = {'extra_data': extra}
@@ -654,33 +452,23 @@ class Logger:
     
     def log(self, level: int, msg: str, *args, extra: Dict[str, Any] = None, **kwargs) -> None:
         """
-        Log message với level chỉ định.
+        Log message with specified level.
         
         Args:
-            level: Cấp độ log
-            msg: Thông điệp log
-            extra: Dữ liệu bổ sung
+            level: Log level
+            msg: Log message
+            extra: Additional data
         """
         if extra is not None:
             kwargs['extra'] = {'extra_data': extra}
         self.logger.log(level, msg, *args, **kwargs)
-    
-    def log_system_info(self) -> None:
-        """Log thông tin hệ thống."""
-        self.info("=== System Information ===")
-        self.info(f"Hostname: {self.system_info['hostname']}")
-        self.info(f"Platform: {self.system_info['platform']}")
-        self.info(f"Python version: {self.system_info['python']}")
-        self.info(f"Application start time: {self.system_info['start_time']}")
-        self.info(f"Logger: {self.name} (level: {self.get_level()})")
-        self.info("=========================")
 
     def measure_performance(self, func_name: str = None) -> Callable:
         """
-        Decorator để đo thời gian thực thi của một hàm và ghi vào log.
+        Decorator to measure execution time of a function and log it.
         
         Args:
-            func_name: Tên hàm để hiển thị trong log
+            func_name: Function name to display in log
             
         Returns:
             Decorator function
@@ -705,10 +493,10 @@ class Logger:
             return wrapper
         return decorator
 
-# Tạo instance logger mặc định
+# Create default logger instance
 logger = Logger('nx-editor8')
 
-# Cấu hình mặc định cho file logging
+# Default configuration for file logging
 logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
 if not os.path.exists(logs_dir):
     try:
@@ -722,5 +510,5 @@ if not os.path.exists(logs_dir):
     except Exception as e:
         logger.error(f"Failed to set up file logging: {e}")
 
-# Xuất logger instance
+# Export logger instance
 __all__ = ['logger', 'Logger', 'LOG_LEVELS']

@@ -7,7 +7,7 @@ Module thực hiện xử lý và cải thiện kịch bản, bao gồm việc t
 
 import time
 from ..logger import logger
-from ..image_search import ImageSearch
+from ..utils.image_search import ImageSearch
 
 def script_processor(data):
     """

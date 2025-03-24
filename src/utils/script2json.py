@@ -2,7 +2,7 @@ import re
 import random
 import json
 import os
-from src.logger import logger  # Fixed import to use the correct logger module
+from ..logger import logger
 
 def parse_media_line(line: str) -> dict:
     """
@@ -248,62 +248,5 @@ def script2json(script: str) -> dict:
     # If global background music hasn't been set, choose randomly
     if not result["background_music"]:
         result["background_music"] = random.choice(MUSIC_LIST)
-        logger.info(f"Set random background music: {result['background_music']}")
-    
-    logger.info(f"Script parsing complete. Created {len(result['video'])} segments.")
-    return result
-
-def test_parse_script(): 
-    """Test function to demonstrate script parsing"""
-    logger.info('[x] Testing parse_script')
-    
-    # Create sample content if file doesn't exist
-    sample_file = 'sample2.txt'
-    if not os.path.exists(sample_file):
-        with open(sample_file, 'w') as file:
-            file.write("""Technology: The Future of AI
-#artificial intelligence, future technology, machine learning
-$https://source.example.com/article123
-+description: Exploring the future of artificial intelligence and its impact on society
-+speaker: Alex Smith
-
-https://example.com/image1.jpg&duration=5
-Artificial Intelligence is transforming our world in ways we never imagined.
-
-https://example.com/image2.jpg&type=image&duration=4
-Machine learning algorithms can now recognize patterns and make predictions with incredible accuracy.
-
-https://example.com/video1.mp4&type=video&duration=10
-<break=2>
-In the next decade, AI is expected to revolutionize industries from healthcare to transportation.
-""")
-        logger.info(f"Created sample file: {sample_file}")
-
-    # Read text from file
-    try:
-        with open(sample_file, 'r') as file:
-            script = file.read()
-        logger.info(f"Successfully read {len(script)} characters from {sample_file}")
-
-        # Parse script
-        result = script2json(script)
         
-        # Convert to JSON with pretty formatting
-        json_output = json.dumps(result, ensure_ascii=False, indent=4)
-        logger.info(f'[x] Parsed result preview: {json_output[:100]}...')
-        
-        # Save to output file
-        output_file = 'sample2.json'
-        with open(output_file, 'w') as file:
-            file.write(json_output)
-        logger.info(f'[x] Result saved to {output_file}')
-        
-    except FileNotFoundError:
-        logger.error(f"File not found: {sample_file}")
-    except Exception as e:
-        logger.exception(f"Error parsing script: {str(e)}")
-
-if __name__ == "__main__":
-    # Set up more detailed logging for debugging
-    logger.set_level("DEBUG")
-    test_parse_script()
+    return result 

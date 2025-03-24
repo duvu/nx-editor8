@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Import VideoSearch từ module src
-from src.video_search import VideoSearch
+from src.utils.video_search import VideoSearch
 from src.logger import logger
 
 # Thiết lập mức log thành DEBUG

@@ -47,7 +47,7 @@ import time
 import random
 from typing import Dict, Any, List, Tuple, Optional
 from ..logger import logger
-from ..video_search import VideoSearch
+from ..utils.video_search import VideoSearch
 
 # Định nghĩa các hằng số
 URL_PATTERN = r'^https?://'

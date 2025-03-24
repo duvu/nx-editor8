@@ -15,7 +15,7 @@ from urllib.parse import urlparse, parse_qs, quote_plus
 
 import requests
 import yt_dlp
-from .logger import logger
+from ..logger import logger
 
 
 

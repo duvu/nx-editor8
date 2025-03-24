@@ -15,45 +15,16 @@ from src.config import INPUT_QUEUE, OUTPUT_QUEUE, PROCESSOR_ID, get_log_level
 from src.logger import logger
 from src.processor_chain import ProcessorChain
 from src.rabbitmq_processor import ChainedRabbitMQProcessor
-from src.script2json import script2json
+from src.utils.script2json import script2json
 
-# Try to import video_processor, use a mock if it fails
-try:
-    from src.processor.video_processor import video_processor
-except ImportError as e:
-    logger.warning(f"Could not import video_processor: {e}")
-    
-    def video_processor(data: Dict[str, Any]) -> Dict[str, Any]:
-        """Mock video processor when dependencies are missing."""
-        logger.warning("Using mock video_processor due to missing dependencies")
-        return data
+# Import processors, raise error if not found
+from src.processor.image_processor import image_processor
+from src.processor.video_processor import video_processor
+from src.processor.script_processor import script_processor
+from src.processor.s2j_processor import s2j_processor
 
-# Try to import ImageSearch, create a mock version if it fails
-try:
-    from src.image_search import ImageSearch
-except ImportError as e:
-    logger.warning(f"Could not import ImageSearch: {e}")
-    
-    # Create a mock ImageSearch class
-    class MockImageSearch:
-        """Mock version of ImageSearch for when dependencies are missing."""
-        
-        def __init__(self, *args, **kwargs):
-            logger.warning("Using MockImageSearch because duckduckgo_search is not installed")
-        
-        def is_url_accessible(self, url: str) -> bool:
-            """Always return True for URLs in mock mode."""
-            logger.info(f"MockImageSearch: Pretending URL is accessible: {url}")
-            return True
-            
-        def get_alternative_image(self, keywords: str, *args, **kwargs) -> Optional[str]:
-            """Return a placeholder image URL."""
-            logger.info(f"MockImageSearch: Returning placeholder image for keywords: {keywords}")
-            # Return a placeholder image URL from a public placeholder service
-            return "https://via.placeholder.com/1200x800.png"
-    
-    # Assign the mock class to the ImageSearch name
-    ImageSearch = MockImageSearch
+# Import ImageSearch, raise error if not found
+from src.utils.image_search import ImageSearch
 
 # Constants
 MIN_REQUIRED_IMAGES = 5
@@ -161,36 +132,6 @@ def process_image_url(line: str, url: str, url_parts: List[str],
     
     return line
 
-def image_validator_processor(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Check and replace unreachable image URLs in the article.
-    
-    Args:
-        data: Dictionary containing article and title
-        
-    Returns:
-        Updated data with validated image URLs
-    """
-    logger.info("Starting image validator processor")
-    
-    article = data["article"]
-    title = data["title"]
-    
-    image_searcher = ImageSearch()
-    lines = article.strip().split('\n')
-    keywords = extract_keywords(lines, title)
-    
-    modified_lines = []
-    for line in lines:
-        if line.startswith('http://') or line.startswith('https://'):
-            url_parts = line.split(',', 1)
-            url = url_parts[0].strip()
-            line = process_image_url(line, url, url_parts, image_searcher, keywords)
-        
-        modified_lines.append(line)
-    
-    data["article"] = '\n'.join(modified_lines)
-    return data
-
 def find_last_image_position(lines: List[str]) -> int:
     """Find the position of the last image URL in the lines.
     
@@ -252,53 +193,6 @@ def get_image_lines(lines: List[str]) -> List[str]:
     """
     return [line for line in lines if line.startswith('http://') or line.startswith('https://')]
 
-def script_processor(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Perform additional script processing including ensuring minimum image count.
-    
-    Args:
-        data: Dictionary containing article and title
-        
-    Returns:
-        Updated data with processed script
-    """
-    logger.info("Starting script processor")
-    
-    article = data["article"]
-    title = data["title"]
-    
-    lines = article.strip().split('\n')
-    image_lines = get_image_lines(lines)
-    image_count = len(image_lines)
-    
-    logger.info(f"Found {image_count} image lines in the article")
-    
-    if image_count < MIN_REQUIRED_IMAGES:
-        keywords = extract_keywords(lines, title)
-        logger.info(f"Using keywords '{keywords}' to find additional images")
-        
-        image_searcher = ImageSearch()
-        new_images_needed = MIN_REQUIRED_IMAGES - image_count
-        
-        lines = add_additional_images(
-            lines, image_lines, new_images_needed, image_searcher, keywords
-        )
-        
-        data["article"] = '\n'.join(lines)
-    
-    return data
-
-def s2j_processor(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Convert script to JSON format.
-    
-    Args:
-        data: Dictionary containing article and title
-        
-    Returns:
-        Updated data with JSON-formatted script
-    """
-    logger.info("Starting script2json processor")
-    return script2json(data["article"])
-
 def create_complete_pipeline() -> ProcessorChain:
     """Create and configure the complete processing pipeline.
     
@@ -308,16 +202,19 @@ def create_complete_pipeline() -> ProcessorChain:
     chain = ProcessorChain("complete_pipeline")
     chain.add_processor(extract_article, "extract_article")
     
-    # Check if we're using the real ImageSearch or the mock version
-    if not isinstance(ImageSearch, type) or ImageSearch.__name__ != "MockImageSearch":
-        # Only add image processors if the real ImageSearch is available
-        chain.add_processor(image_validator_processor, "image_validator_processor")
-        chain.add_processor(video_processor, "video_processor")
-        chain.add_processor(script_processor, "script_processor")
-    else:
-        logger.warning("Skipping image and video processors due to missing dependencies")
+    # Add image processor 
+    chain.add_processor(image_processor, "image_processor")
     
+    # Add video processor
+    chain.add_processor(video_processor, "video_processor")
+    
+    # Add script processor
+    chain.add_processor(script_processor, "script_processor")
+    
+    # Add JSON conversion processor
     chain.add_processor(s2j_processor, "script2json")
+    
+    # Set error handler
     chain.set_error_handler(error_handler)
     return chain
 
@@ -360,6 +257,7 @@ def handle_shutdown(processor: ChainedRabbitMQProcessor, sig: int, frame: Any) -
     finally:
         # Force exit - don't return to caller
         logger.info("Exiting application")
+        sys.stdout.flush()  # Ensure logs are displayed
         os._exit(0)  # Use os._exit to ensure immediate termination
 
 def parse_arguments() -> argparse.Namespace:
@@ -496,22 +394,34 @@ def main() -> None:
                 sys.exit(1)
             
             # Set up signal handlers for graceful shutdown
+            # Use stronger signal handling that can't be overridden
             signal.signal(signal.SIGINT, lambda sig, frame: handle_shutdown(processor, sig, frame))
             signal.signal(signal.SIGTERM, lambda sig, frame: handle_shutdown(processor, sig, frame))
             
+            # Original shutdown handler as a backup
+            original_sigint = signal.getsignal(signal.SIGINT)
+            
             logger.info(f"Chain processor '{PROCESSOR_ID}' running. Press Ctrl+C to exit.")
             
-            # Keep main thread alive
-            while True:
-                time.sleep(1)
+            # Keep main thread alive with shorter sleep to be more responsive to signals
+            try:
+                while True:
+                    time.sleep(0.1)
+            except KeyboardInterrupt:
+                # This should be reached if the signal handler doesn't work
+                logger.info("KeyboardInterrupt received. Shutting down...")
+                handle_shutdown(processor, signal.SIGINT, None)
                 
         except KeyboardInterrupt:
-            # This should not be reached if signal handler works properly
-            # But keeping as a fallback
-            logger.info("KeyboardInterrupt received directly. Shutting down...")
+            # Extra fallback, should not normally be reached
+            logger.info("KeyboardInterrupt received directly. Forcing shutdown...")
             if processor:
-                processor.close()
-            sys.exit(0)
+                try:
+                    processor.close()
+                except Exception as ex:
+                    logger.error(f"Error closing processor during forced shutdown: {ex}")
+            sys.stdout.flush()
+            os._exit(0)
         except Exception as e:
             logger.exception(f"Unhandled exception in main function: {e}")
             if processor:

@@ -1,0 +1,106 @@
+{
+  "category": "https",
+  "title": "//www.youtube.com/watch?v=65YhmHsuD-M,12-18;23-29;36-42,crop:300-0-1920-820,excludes=0-12;18-23;29-36;42-60",
+  "keyword": [],
+  "src": null,
+  "description": null,
+  "unique_id": null,
+  "ads": null,
+  "playlist": [],
+  "test": false,
+  "speaker": null,
+  "upload": [
+    "youtube"
+  ],
+  "thumbnail": "https://i.ex-cdn.com/vietnamfinance.vn/files/content/2025/03/01/xe-dien-2-1520.jpg",
+  "background_music": "track_random_2",
+  "video": [
+    {
+      "media_clips": [
+        {
+          "url": "https://www.youtube.com/watch?v=h54BRWRvmNs",
+          "type": "video",
+          "pickes": [],
+          "crop": "300-0-1920-820",
+          "excludes": [
+            {
+              "start": 0,
+              "end": 7
+            },
+            {
+              "start": 13,
+              "end": 28
+            },
+            {
+              "start": 34,
+              "end": 39
+            },
+            {
+              "start": 45,
+              "end": 60
+            }
+          ],
+          "effect": {}
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=JQ44-OEJFsw",
+          "type": "video",
+          "pickes": [],
+          "crop": "300-0-1920-820",
+          "excludes": [
+            {
+              "start": 0,
+              "end": 6
+            },
+            {
+              "start": 12,
+              "end": 24
+            },
+            {
+              "start": 30,
+              "end": 35
+            },
+            {
+              "start": 41,
+              "end": 60
+            }
+          ],
+          "effect": {}
+        }
+      ],
+      "content": [
+        "Tin tức: CHÍNH THỨC MIỄN LỆ PHÍ TRƯỚC BẠ CHO Ô TÔ ĐIỆN THÊM 2 NĂM\\n\\n#ô tô điện, lệ phí trước bạ, nghị định 51, nghị định 10, thu ngân sách, xe điện, phát triển thị trường, môi trường, VinFast, ô tô điện, xe điện, lệ phí trước bạ, miễn lệ phí trước bạ\\n+ target_dir: /home/beou/data/auto5\\n+ channel_name: Tin tức\\n+ channel_id: UVchinh-th\\n+ is_vertical: false\\n+ unique_id: chinh-thuc-mien-le-phi-truoc-ba-cho-o-to-đien-them-2-nam-889\\n+playlist: Tin tức\\n"
+      ]
+    },
+    {
+      "media_clips": [
+        {
+          "url": "https://i.ex-cdn.com/vietnamfinance.vn/files/content/2025/03/01/xe-dien-2-1520.jpg",
+          "type": "image",
+          "pickes": [],
+          "crop": null,
+          "excludes": [],
+          "effect": {
+            "name": "panning",
+            "params": {
+              "duration": 6,
+              "direction": "right\\n\\n\\n-510 từ-~2 phút 7 giây\\n\\nChính phủ vừa ban hành Nghị định số 51/2025/NĐ-CP sửa đổi"
+            }
+          }
+        },
+        {
+          "url": "https://wallpaperaccess.com/full/3787594.jpg",
+          "type": "image",
+          "pickes": [],
+          "crop": null,
+          "excludes": [],
+          "effect": {}
+        }
+      ],
+      "content": [
+        ""
+      ]
+    }
+  ],
+  "is_vertical": false
+}

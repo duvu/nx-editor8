@@ -11,7 +11,7 @@ Module này cung cấp lớp ImageSearch để:
 4. Tìm kiếm hình ảnh thay thế dựa trên từ khóa
 
 Cách sử dụng:
-    from src.image_search import ImageSearch
+    from src.utils.image_search import ImageSearch
     
     # Khởi tạo đối tượng ImageSearch
     image_searcher = ImageSearch()
@@ -29,17 +29,31 @@ Tác giả: NX-Editor8 Team
 Phiên bản: 1.1
 """
 
-import random
+import os
+import re
 import time
+import random
+import logging
+import traceback
 from io import BytesIO
-from typing import List, Dict, Any, Tuple, Optional, Union
-from urllib.parse import urlparse
+from typing import Any, Dict, List, Optional, Tuple, Union
+from urllib.parse import urlparse, quote_plus
+import urllib.request
+
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+
+try:
+    from duckduckgo_search import DDGS
+    HAS_DDGS = True
+except ImportError:
+    HAS_DDGS = False
 
 import requests
-from duckduckgo_search import DDGS
-from PIL import Image
-
-from .logger import logger
+from ..logger import logger
 
 # Định nghĩa các hằng số
 DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'

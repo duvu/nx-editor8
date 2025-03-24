@@ -45,7 +45,7 @@ import re
 import time
 from typing import Dict, Any, List, Tuple, Optional
 from ..logger import logger
-from ..image_search import ImageSearch
+from ..utils.image_search import ImageSearch
 
 # Định nghĩa các hằng số
 URL_PATTERN = r'^https?://'

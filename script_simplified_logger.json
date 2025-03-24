@@ -1,0 +1,124 @@
+{
+  "category": "Tin tức",
+  "title": "CHÍNH THỨC MIỄN LỆ PHÍ TRƯỚC BẠ CHO Ô TÔ ĐIỆN THÊM 2 NĂM\\n\\n#ô tô điện, lệ phí trước bạ, nghị định 51, nghị định 10, thu ngân sách, xe điện, phát triển thị trường, môi trường, VinFast, ô tô điện, xe điện, lệ phí trước bạ, miễn lệ phí trước bạ\\n+ target_dir: /home/beou/data/auto5\\n+ channel_name: Tin tức\\n+ channel_id: UVchinh-th\\n+ is_vertical: false\\n+ unique_id: chinh-thuc-mien-le-phi-truoc-ba-cho-o-to-đien-them-2-nam-889\\n+playlist: Tin tức\\n",
+  "keyword": [],
+  "src": null,
+  "description": null,
+  "unique_id": null,
+  "ads": null,
+  "playlist": [],
+  "test": false,
+  "speaker": null,
+  "upload": [
+    "youtube"
+  ],
+  "thumbnail": "https://i.ex-cdn.com/vietnamfinance.vn/files/content/2025/03/01/xe-dien-2-1520.jpg",
+  "background_music": "track_random_1",
+  "video": [
+    {
+      "media_clips": [
+        {
+          "url": "https://i.ex-cdn.com/vietnamfinance.vn/files/content/2025/03/01/xe-dien-2-1520.jpg",
+          "type": "image",
+          "pickes": [],
+          "crop": null,
+          "excludes": [],
+          "effect": {
+            "name": "panning",
+            "params": {
+              "duration": 6,
+              "direction": "right"
+            }
+          }
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=h54BRWRvmNs",
+          "type": "video",
+          "pickes": [],
+          "crop": "300-0-1920-820",
+          "excludes": [
+            {
+              "start": 0,
+              "end": 12
+            },
+            {
+              "start": 18,
+              "end": 26
+            },
+            {
+              "start": 32,
+              "end": 39
+            },
+            {
+              "start": 45,
+              "end": 60
+            }
+          ],
+          "effect": {}
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=lYxCXKwP09U",
+          "type": "video",
+          "pickes": [],
+          "crop": "300-0-1920-820",
+          "excludes": [
+            {
+              "start": 0,
+              "end": 10
+            },
+            {
+              "start": 16,
+              "end": 24
+            },
+            {
+              "start": 30,
+              "end": 36
+            },
+            {
+              "start": 42,
+              "end": 60
+            }
+          ],
+          "effect": {}
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=YSzuBSUuVqY",
+          "type": "video",
+          "pickes": [],
+          "crop": "300-0-1920-820",
+          "excludes": [
+            {
+              "start": 0,
+              "end": 8
+            },
+            {
+              "start": 14,
+              "end": 22
+            },
+            {
+              "start": 28,
+              "end": 35
+            },
+            {
+              "start": 41,
+              "end": 60
+            }
+          ],
+          "effect": {}
+        },
+        {
+          "url": "https://thumbs.dreamstime.com/z/d-rendering-high-resolution-image-candy-generic-isolated-white-background-quality-details-276606283.jpg",
+          "type": "image",
+          "pickes": [],
+          "crop": null,
+          "excludes": [],
+          "effect": {}
+        }
+      ],
+      "content": [
+        "Chính phủ vừa ban hành Nghị định số 51/2025/NĐ-CP sửa đổi, bổ sung một số điều của Nghị định số 10/2022/NĐ-CP ngày 15/1/2022 của Chính phủ quy định về lệ phí trước bạ.\\nTheo Nghị định 51, từ ngày 1/3/2025 đến hết ngày 28/2/2027, mức nộp lệ phí trước bạ với ô tô điện chạy pin là 0%.\\nTại Nghị định số 10/2022, ưu đãi lệ phí trước đối với ô tô điện chạy pin trong 3 năm kể từ ngày 1/3/2022, nộp lệ phí trước lần đầu với mức thu là 0%. Trong vòng 2 năm tiếp theo, nộp lệ phí trước lần đầu với mức thu bằng 50% mức thu đối với ô tô chạy xăng, dầu có cùng chỗ ngồi.\\nNhư vậy, theo nghị định mới, ô tô điện chạy pin sẽ được miễn lệ phí trước bạ thêm 2 năm.\\nTại tờ trình dự thảo nghị định sửa đổi, bổ sung một số điều của Nghị định số 10/2022/NĐ-CP mà Bộ Tài chính gửi Chính phủ, cơ quan này đề xuất ô tô điện chạy pin sẽ tiếp tục nộp lệ phí trước bạ lần đầu với mức thụ là 0% đến hết ngày 28/2/2027.\\nTheo Bộ Tài chính, về tác động đối với thu ngân sách nhà nước, giả sử cùng lượng xe ô tô điện chạy pin đăng ký năm 2024, nếu áp dụng mức thu lệ phí trước bạ 0% đối với xe ô tô điện chạy pin trong giai đoạn 1/3/2025-28/2/2027 sẽ làm giảm thu ngân sách nhà nước về lệ phí trước bạ khoảng hơn 4.800 tỷ đồng/năm (giảm thêm 2.400 tỷ đồng/năm so với quy định hiện hành tại Nghị định số 10/2022).\\nBộ Tài chính đánh giá, việc tiếp tục áp dụng mức thu lệ phí trước bạ 0% đối với xe ô tô điện chạy pin góp phần phát triển thị trường, ngành công nghiệp ô tô điện và các ngành công nghiệp phụ trợ, tạo việc làm, tăng thu nhập cho người lao động, đảm bảo an sinh xã hội, có tác động lan tỏa sang các ngành kinh tế khác và thúc đẩy tăng trưởng kinh tế.\\nNgoài ra, phát triển xe điện đóng góp đáng kể vào việc giảm phát thải khí nhà kính. Mức giảm phát thải này tới đây có thể tăng khi ô tô điện được dự báo tăng trưởng 25-30% mỗi năm.\\nTrước đó không lâu, Công ty TNHH Kinh doanh thương mại và Dịch vụ VinFast (VinFast) có văn bản kiến nghị kéo dài thời gian miễn lệ phí trước bạ thêm 3 năm, từ ngày 1/3/2025 đến 28/2/2028 và áp dụng mức giảm 50% cho 3 năm tiếp theo.\\nTheo VinFast, các chính sách ưu đãi về phí trước bạ có hiệu quả cho quá trình chuyển đổi xanh của Việt Nam. Đặc biệt, trong bối cảnh Việt Nam đang chịu ô nhiễm môi trường nghiêm trọng từ nguồn phát thải của phương tiện sử dụng nhiên liệu hóa thạch và bắt đầu bước vào giai đoạn \\\"ôtô hóa\\\".\\n\\n<break>\\nCảm ơn các bạn đã xem bản tin.\\n"
+      ]
+    }
+  ],
+  "is_vertical": false
+}
