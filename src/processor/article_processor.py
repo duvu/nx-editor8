@@ -66,7 +66,7 @@ def extract_article(message):
     
     # Trích xuất nội dung từ bài viết
     # Loại bỏ các dòng bắt đầu bằng ký tự đặc biệt và dòng trống
-    SPECIAL_CHARS = ('-', '*', '#', '+', '?', '<', '>')
+    SPECIAL_CHARS =  ('<', '>')
     # Loại bỏ các dòng có chứa một số từ khoá không mong muốn
     UNWANTED_KEYWORDS = ('VTVgo')
     
