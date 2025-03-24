@@ -1,0 +1,156 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+## 0. Always activate venv before run command in python project
+## 1. Import Organization
+1. AI must group imports into three sections, separated by a blank line:
+   - Standard library imports (built-in Python modules)
+   - Third-party imports (installed via pip)
+   - Local application imports (from the current project)
+
+2. AI must sort imports alphabetically within each group.
+
+3. AI must prefer absolute imports. Relative imports are only allowed for intra-package references.
+
+4. AI must not use wildcard imports (`from module import *`) to prevent unexpected behavior.
+
+5. When importing multiple names from the same module, AI must use a single import statement and wrap them in parentheses if the line exceeds the recommended length.
+
+6. AI must place all import statements at the **top of the file**, before any module-level variables or function definitions.
+
+## 2. File Length
+- AI must **keep files under 300 lines** whenever possible.
+- **Exceptions**:
+  - AI/ML model training scripts
+  - Large API controllers handling multiple endpoints
+  - Configuration files (`settings.py`, `config.py`, `.yaml`)
+- If a file exceeds **500 lines**, AI must suggest **refactoring** into modules.
+
+## 3. Function Length
+- AI must limit each function to **30 lines**, excluding docstrings.
+- If a function exceeds **30 lines**, AI must refactor it into **smaller helper functions**.
+
+## 4. **Critical Rule: No Logic Changes During Refactoring**
+- Every **refactor must not change the old logic**.
+- AI must **preserve existing functionality** when restructuring code.
+- AI must ensure **unit tests pass before and after** any refactoring.
+
+## 5. Documentation
+- AI must generate **Google-style docstrings** for all public functions.
+- Private functions **do not require documentation**.
+- AI must avoid excessive inline comments inside functions; instead, code must be self-explanatory.
+
+## 6. Naming Conventions
+- AI must use **English** for all variable and function names.
+- AI must follow **snake_case** for variables and functions.
+- AI must use **UPPER_CASE** for constants.
+- AI must follow **PascalCase** for class names.
+- AI must prefix **private variables** with `_` where necessary.
+
+## 7. Code Readability
+- AI must enforce **4-space indentation** and ensure **PEP8 compliance**.
+- AI must **avoid deeply nested loops or conditionals**—refactor if needed.
+- AI must adhere to **PEP 8 (Python) style guide**.
+
+## 8. Error Handling & Logging
+- AI must handle exceptions properly and **must not suppress errors**.
+- AI must implement **structured logging** and must not use `print()`.
+- AI must log **meaningful error messages** with proper context.
+
+## 9. Code Structure
+- AI must follow the **Single Responsibility Principle (SRP)**—each function should perform **one** task.
+- AI must write **pure functions** when possible (avoid modifying global state).
+
+## 10. Hard-Coding Prevention
+- AI **must not hard-code values inside functions**.
+- AI must use **constants, environment variables, or configuration files** instead.
+- AI must avoid **magic numbers**—define them as named constants.
+
+## 11. Type Hints & Annotations
+- AI must enforce **type hints** for function arguments and return values.
+- This improves code readability and ensures static analysis compatibility.
+
+## 12. Function & Variable Scope
+- AI must minimize **global variables**—function arguments must be used instead.
+- If a function modifies global state, AI must **document it explicitly**.
+- AI must use `global` and `nonlocal` **only when necessary**.
+
+## 13. Performance Optimization
+- AI must use **list comprehensions** instead of `map()` or `for` loops where possible.
+- AI must avoid `+` for string concatenation inside loops and use `join()` instead.
+- AI must use **generators** (`yield`) for large data processing.
+
+## 14. Testing & Code Coverage
+- AI must generate **unit tests** for all critical functions.
+- AI must use **pytest** for testing instead of built-in `unittest`.
+- AI must ensure at least **80% code coverage**.
+
+## 15. Dependency Management
+- AI must use **requirements.txt** or `pyproject.toml` to manage dependencies.
+- AI must prefer **pipenv** or **poetry** over `pip install` to ensure version control.
+
+## 16. Security Best Practices
+- AI must **not store passwords or API keys in code**. Instead, AI must enforce `.env` usage.
+- AI must **validate user inputs** to prevent security risks like SQL injection.
+- AI must **use parameterized queries** instead of string concatenation in SQL.
+
+## 17. Logging Guidelines
+1. AI must use the built-in `logging` module instead of `print()` for debugging and logging purposes.
+2. AI must configure logging at the **application entry point** with a consistent format.
+3. AI must use appropriate **log levels**:
+   - `DEBUG` for debugging details.
+   - `INFO` for general application events.
+   - `WARNING` for unexpected but non-breaking issues.
+   - `ERROR` for application errors.
+   - `CRITICAL` for serious errors that require immediate attention.
+4. AI must define a **project-wide logger** that logs to both **console and a rotating file**.
+5. If no logger is defined, AI must set up a default logger with **console output and file rotation**.
+6. AI must output logs to **both console and log files** where necessary.
+7. AI must avoid logging **sensitive information** such as passwords, API keys, or personally identifiable data.
+8. AI must use `logger.exception()` to log stack traces when handling exceptions.
+9. AI must ensure **thread-safe logging** in multi-threaded applications.
+10. For distributed applications, AI must use **structured logging** with a standardized format for log aggregation.
+
+## 18. API Development Guidelines
+### API Design Principles
+- AI must follow **RESTful** principles unless using **GraphQL or gRPC**.
+- AI must use **plural nouns** for resource names and avoid verbs.
+- AI must use **consistent HTTP methods** for CRUD operations.
+- AI must prefer **idempotent operations** where possible.
+
+### API Versioning
+- AI must use **explicit versioning** (e.g., `/v1/users`).
+- AI must avoid breaking backward compatibility.
+- AI must properly deprecate old versions before removal.
+
+### Request & Response Standards
+- AI must use **JSON format** for API responses.
+- AI must maintain a **consistent response structure**.
+- AI must implement **pagination** for large datasets.
+- AI must use **ISO 8601 format for dates**.
+- AI must ensure **proper error handling** with standardized HTTP response codes.
+
+### Authentication & Security
+- AI must use **OAuth2, JWT, or API keys** for authentication.
+- AI must enforce **HTTPS** for secure communication.
+- AI must implement **rate limiting** to prevent abuse.
+- AI must validate **all user inputs** to prevent security threats.
+- AI must use **CORS properly** to restrict cross-origin requests.
+
+### API Documentation
+- AI must generate API docs using **Swagger (OpenAPI)** or **Postman**.
+- AI must provide examples for **request and response payloads**.
+- AI must clearly document **required parameters, headers, and status codes**.
+- AI must keep API docs **updated** with each release.
+
+### Logging & Monitoring
+- AI must log **all API requests and responses**, excluding sensitive data.
+- AI must use **structured logging** for debugging.
+- AI must set up **alerts for high error rates or slow response times**.
+
+### Testing & Deployment
+- AI must generate **unit tests** and **integration tests**.
+- AI must ensure **zero downtime deployment** for critical APIs.
+- AI must use **CI/CD pipelines** to automate testing and deployment.

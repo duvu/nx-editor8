@@ -186,3 +186,13 @@ processor.process_with_chain('input_queue', chain, 'output_queue')
 ## Configuration
 
 Adjust the settings in `src/config.py` to configure the application.
+
+
+# Process a file directly
+python mainZ.py --input-file article.txt --output-file result.json --title "My Article"
+
+# Run in queue mode with custom queue names
+python mainZ.py --queue-mode --input-queue custom_input --output-queue custom_output
+
+# Default behavior (queue mode with default queue names)
+python mainZ.py
