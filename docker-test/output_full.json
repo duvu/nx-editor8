@@ -1,0 +1,76 @@
+{
+  "category": "https",
+  "title": "//www.youtube.com/watch?v=h54BRWRvmNs,6-12;36-42;70-76,crop:300-0-1920-820,excludes=0-6;12-36;42-70;76-632",
+  "keyword": [],
+  "src": null,
+  "description": null,
+  "unique_id": null,
+  "ads": null,
+  "playlist": [],
+  "test": false,
+  "speaker": null,
+  "upload": [
+    "youtube"
+  ],
+  "thumbnail": null,
+  "background_music": "track_random_1",
+  "video": [
+    {
+      "media_clips": [
+        {
+          "url": "https://www.youtube.com/watch?v=YSzuBSUuVqY",
+          "type": "video",
+          "pickes": [],
+          "crop": "300-0-1920-820",
+          "excludes": [
+            {
+              "start": 0,
+              "end": 13
+            },
+            {
+              "start": 19,
+              "end": 25
+            },
+            {
+              "start": 31,
+              "end": 41
+            },
+            {
+              "start": 47,
+              "end": 60
+            }
+          ],
+          "effect": {}
+        },
+        {
+          "url": "https://thumbs.dreamstime.com/z/d-rendering-high-resolution-image-candy-generic-isolated-white-background-quality-details-276606283.jpg",
+          "type": "image",
+          "pickes": [],
+          "crop": null,
+          "excludes": [],
+          "effect": {}
+        },
+        {
+          "url": "https://thumbs.dreamstime.com/z/d-rendering-high-resolution-image-candy-generic-isolated-white-background-quality-details-276606283.jpg",
+          "type": "image",
+          "pickes": [],
+          "crop": null,
+          "excludes": [],
+          "effect": {}
+        },
+        {
+          "url": "https://wallpapercave.com/wp/wp10333222.png",
+          "type": "image",
+          "pickes": [],
+          "crop": null,
+          "excludes": [],
+          "effect": {}
+        }
+      ],
+      "content": [
+        "Test video search about nature and wildlife documentaries"
+      ]
+    }
+  ],
+  "is_vertical": false
+}
