@@ -5,6 +5,8 @@ import re
 import signal
 import sys
 import time
+import threading
+import random
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Third-party imports
@@ -15,16 +17,21 @@ from src.config import INPUT_QUEUE, OUTPUT_QUEUE, PROCESSOR_ID, get_log_level
 from src.logger import logger
 from src.processor_chain import ProcessorChain
 from src.rabbitmq_processor import ChainedRabbitMQProcessor
-from src.utils.script2json import script2json
 
 # Import processors, raise error if not found
-from src.processor.image_processor import image_processor
-from src.processor.video_processor import video_processor
-from src.processor.script_processor import script_processor
+from src.processor import (
+    extract_article,
+    image_processor,
+    script_processor,
+    s2j_processor,
+    video_processor
+)
 from src.processor.s2j_processor import s2j_processor
 
 # Import ImageSearch, raise error if not found
 from src.utils.image_search import ImageSearch
+# Import from utils instead of defining locally
+from src.utils.keyword_utils import select_random_keywords, extract_keywords
 
 # Constants
 MIN_REQUIRED_IMAGES = 5
@@ -58,48 +65,6 @@ def error_handler(message: Dict[str, Any], error: Exception, processor_name: str
         return message
     
     return None
-
-def extract_article(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Extract article and title from message.
-    
-    Args:
-        message: Input message containing article and title
-        
-    Returns:
-        Dict containing article and title, or None if article is missing
-    """
-    logger.info("Starting extract_article processor")
-    article = message.get("article", "")
-    title = message.get("title", "")
-    
-    if not article:
-        logger.error("No article found in message")
-        return None
-        
-    return {"article": article, "title": title}
-
-def extract_keywords(lines: List[str], title: str) -> str:
-    """Extract keywords from article lines or use title as fallback.
-    
-    Args:
-        lines: List of lines from the article
-        title: Article title to use as fallback
-        
-    Returns:
-        Keywords string extracted from article or title
-    """
-    keywords = ""
-    for line in lines:
-        if line.startswith('#'):
-            keywords = line.strip('#').strip()
-            break
-    
-    if not keywords:
-        keywords = title if title else "generic images"
-        logger.info(f"No keywords found, using title: {keywords}")
-    
-    logger.info(f"Extracted keywords: {keywords}")
-    return keywords
 
 def process_image_url(line: str, url: str, url_parts: List[str], 
                     image_searcher: ImageSearch, keywords: str) -> str:
@@ -206,13 +171,17 @@ def create_complete_pipeline() -> ProcessorChain:
     chain.add_processor(image_processor, "image_processor")
     
     # Add video processor
-    chain.add_processor(video_processor, "video_processor")
+    # Create a wrapper function that passes the creative_commons_only parameter
+    def video_processor_with_cc(data):
+        return video_processor(data, creative_commons_only=True)
+    
+    chain.add_processor(video_processor_with_cc, "video_processor")
     
     # Add script processor
     chain.add_processor(script_processor, "script_processor")
     
     # Add JSON conversion processor
-    chain.add_processor(s2j_processor, "script2json")
+    chain.add_processor(s2j_processor, "s2j_processor")
     
     # Set error handler
     chain.set_error_handler(error_handler)
@@ -249,6 +218,16 @@ def handle_shutdown(processor: ChainedRabbitMQProcessor, sig: int, frame: Any) -
     """
     logger.info("\nShutting down processor...")
     try:
+        # Start a timer thread that will force exit after a timeout
+        def force_exit():
+            time.sleep(10)  # Wait 10 seconds max for graceful shutdown
+            logger.warning("Shutdown taking too long! Forcing exit...")
+            os._exit(1)
+            
+        force_thread = threading.Thread(target=force_exit, daemon=True)
+        force_thread.start()
+        
+        # Try graceful shutdown
         if processor:
             processor.close()
             logger.info("Processor closed successfully")

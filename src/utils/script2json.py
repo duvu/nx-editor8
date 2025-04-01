@@ -2,7 +2,7 @@ import re
 import random
 import json
 import os
-from ..logger import logger
+from src.logger import logger
 
 def parse_media_line(line: str) -> dict:
     """

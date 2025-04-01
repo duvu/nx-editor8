@@ -46,6 +46,7 @@ import time
 from typing import Dict, Any, List, Tuple, Optional
 from ..logger import logger
 from ..utils.image_search import ImageSearch
+from ..utils.keyword_utils import select_random_keywords
 
 # Định nghĩa các hằng số
 URL_PATTERN = r'^https?://'
@@ -270,8 +271,11 @@ def image_processor(data: Dict[str, Any]) -> Dict[str, Any]:
     logger.debug(f"Article split into {len(lines)} lines")
     
     # Trích xuất từ khóa từ bài viết
-    keywords = extract_keywords(lines, title)
-    logger.info(f"Using keywords for image search: '{keywords}'")
+    full_keywords = extract_keywords(lines, title)
+    
+    # Select 1-2 random keywords from the full set
+    keywords = select_random_keywords(full_keywords)
+    logger.info(f"Using random keywords for image search: '{keywords}' (from full keywords: '{full_keywords}')")
     
     # Xử lý các dòng trong bài viết
     modified_lines, checked_count, replaced_count = process_article_lines(

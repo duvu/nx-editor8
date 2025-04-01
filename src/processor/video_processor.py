@@ -45,9 +45,11 @@ Phiên bản: 1.0
 import re
 import time
 import random
+import os
 from typing import Dict, Any, List, Tuple, Optional
 from ..logger import logger
 from ..utils.video_search import VideoSearch
+from ..utils.keyword_utils import select_random_keywords
 
 # Định nghĩa các hằng số
 URL_PATTERN = r'^https?://'
@@ -111,343 +113,274 @@ def is_video_url(url: str) -> bool:
 
 
 def process_video_url(
-    url: str, 
-    url_parts: List[str], 
-    line_number: int, 
-    video_searcher: VideoSearch, 
-    keywords: str
-) -> Tuple[str, bool]:
+    url: str,
+    url_parts: List[str],
+    line_number: int,
+    video_searcher: VideoSearch,
+    keywords: str,
+    creative_commons_only: bool = True
+) -> Optional[str]:
     """
-    Xử lý URL video: kiểm tra tính khả dụng và thay thế nếu cần
-    
+    Xử lý URL video: kiểm tra tính khả dụng và thay thế nếu cần.
+    Returns None if the video is inaccessible and no suitable CC alternative is found.
+
     Args:
         url: URL video cần xử lý
         url_parts: Các phần của dòng URL (URL và tham số)
         line_number: Số dòng trong bài viết
         video_searcher: Đối tượng VideoSearch để tìm kiếm video thay thế
         keywords: Từ khóa để tìm kiếm video thay thế
-        
+        creative_commons_only: Chỉ sử dụng video có giấy phép Creative Commons
+
     Returns:
-        Tuple (dòng mới, đã thay thế hay không)
+        Optional[str]: Dòng mới với URL hợp lệ hoặc None nếu nên bỏ qua dòng này
     """
     logger.debug(f"Checking video URL at line {line_number}: {url}")
-    
+
     # Kiểm tra tính khả dụng của URL
     url_start_time = time.time()
     is_accessible = video_searcher.is_video_url_accessible(url)
     url_check_time = time.time() - url_start_time
-    
+
     logger.debug(f"URL check took {url_check_time:.2f}s, accessible: {is_accessible}")
-    
-    # Nếu URL không khả dụng, tìm URL thay thế
+
+    # Nếu URL khả dụng, kiểm tra giấy phép CC nếu cần
+    if is_accessible and creative_commons_only:
+        logger.debug(f"URL {url} is accessible, checking CC license.")
+        video_info = video_searcher.get_video_info(url)
+        if not video_info or not video_searcher._is_creative_commons(video_info):
+            logger.warning(f"Video at line {line_number} ({url}) is accessible but not Creative Commons. Skipping.")
+            is_accessible = False # Treat as inaccessible for replacement logic
+        else:
+             logger.debug(f"Video {url} confirmed as Creative Commons.")
+
+
+    # Nếu URL không khả dụng (hoặc không phải CC), tìm URL thay thế
     if not is_accessible:
-        logger.warning(f"Video URL not accessible at line {line_number}: {url}")
-        
-        # Tìm video thay thế
+        logger.warning(f"Video URL at line {line_number} ({url}) is not suitable (inaccessible or not CC).")
+
+        # Tìm video thay thế CC
         search_start_time = time.time()
-        alt_video = video_searcher.get_alternative_video(keywords)
+        # Ensure creative_commons_only=True is passed here explicitly
+        alt_video = video_searcher.get_alternative_video(keywords, creative_commons_only=True)
         search_time = time.time() - search_start_time
-        
+
         if alt_video and 'url' in alt_video:
             new_url = alt_video['url']
-            logger.info(f"Found replacement video in {search_time:.2f}s: {new_url}")
-            
-            # Tạo dòng mới với URL thay thế
+            license_info = alt_video.get('license', 'creative_commons') # Assume CC
+            logger.info(f"Found replacement Creative Commons video in {search_time:.2f}s: {new_url} (License: {license_info})")
+
+            # Tạo dòng mới với URL thay thế và tham số ban đầu hoặc mặc định
             if len(url_parts) > 1:
                 new_line = f"{new_url},{url_parts[1]}"
                 logger.debug(f"Replaced URL with parameters: {new_line}")
             else:
-                new_line = new_url
-                logger.debug(f"Replaced URL: {new_line}")
-            
-            # Bỏ phần thêm mã nhúng HTML
-            return new_line, True
+                # Tạo cài đặt mặc định nếu không có tham số
+                duration = alt_video.get('duration', 60)
+                if duration > 60:
+                    start = max(10, int(duration * 0.2))
+                    end = min(start + 20, int(duration * 0.8))
+                    excludes = f"0-{start};{end}-{duration}"
+                    # Ensure crop parameters are reasonable or omitted if info unavailable
+                    crop_param = "crop:300-0-1920-820" # Keep default for now
+                    new_line = f"{new_url},{start}-{end},{crop_param},excludes={excludes}"
+                else:
+                    crop_param = "crop:300-0-1920-820" # Keep default for now
+                    new_line = f"{new_url},{crop_param}"
+
+                logger.debug(f"Replaced URL with default parameters: {new_line}")
+
+            return new_line # Return the new line with the replacement video
         else:
-            logger.warning(f"Failed to find alternative video for '{keywords}'")
-    
-    # Trả về dòng ban đầu nếu không cần thay thế
-    return url if len(url_parts) == 1 else f"{url},{url_parts[1]}", False
+            logger.warning(f"Failed to find suitable alternative Creative Commons video for '{keywords}' to replace {url}. Skipping this line.")
+            return None # Signal to omit this line entirely
+
+    # Trả về dòng ban đầu nếu URL khả dụng và là CC (hoặc CC không bắt buộc)
+    original_line = url if len(url_parts) == 1 else f"{url},{url_parts[1]}"
+    logger.debug(f"Keeping original valid video line: {original_line}")
+    return original_line
 
 
 def process_url_line(
-    line: str, 
-    line_number: int, 
-    video_searcher: VideoSearch, 
-    keywords: str
-) -> Tuple[str, bool, bool]:
+    line: str,
+    line_number: int,
+    video_searcher: VideoSearch,
+    keywords: str,
+    creative_commons_only: bool = True
+) -> Tuple[Optional[str], bool, bool]:
     """
-    Xử lý dòng chứa URL
-    
+    Xử lý dòng chứa URL. Returns None for the line if it should be omitted.
+
     Args:
         line: Dòng cần xử lý
         line_number: Số dòng trong bài viết
         video_searcher: Đối tượng VideoSearch
         keywords: Từ khóa tìm kiếm
-        
+        creative_commons_only: Chỉ sử dụng video có giấy phép Creative Commons
+
     Returns:
-        Tuple (dòng đã xử lý, có phải video không, đã thay thế không)
+        Tuple (dòng đã xử lý or None, có phải video không, đã thay thế không)
     """
     # Bỏ qua các dòng embed
     if line.startswith('EMBED:'):
         return line, False, False
-        
+
     # Tách URL và các tham số (nếu có)
     url_parts = line.split(',', 1)
     url = url_parts[0].strip()
-    
+
     # Kiểm tra xem URL có phải là video không
     if is_video_url(url):
-        new_line, replaced = process_video_url(
-            url, url_parts, line_number, video_searcher, keywords
+        processed_line = process_video_url(
+            url, url_parts, line_number, video_searcher, keywords, creative_commons_only
         )
-        return new_line, True, replaced
+        # If processed_line is None, it means replacement failed and line should be skipped
+        replaced = (processed_line is not None) and (processed_line != line)
+        return processed_line, True, replaced
     else:
+        # Not a video URL line
         return line, False, False
 
 
 def process_article_lines(
-    lines: List[str], 
-    keywords: str, 
-    video_searcher: VideoSearch
+    lines: List[str],
+    keywords: str,
+    video_searcher: VideoSearch,
+    creative_commons_only: bool = True
 ) -> Tuple[List[str], int, int, int]:
     """
-    Xử lý tất cả các dòng trong bài viết để kiểm tra và thay thế video
-    
+    Xử lý từng dòng trong bài viết, omitting lines where video processing fails.
+
     Args:
         lines: Danh sách các dòng trong bài viết
-        keywords: Từ khóa để tìm kiếm video thay thế
+        keywords: Từ khóa tìm kiếm
         video_searcher: Đối tượng VideoSearch
-        
+        creative_commons_only: Chỉ sử dụng video có giấy phép Creative Commons
+
     Returns:
-        Tuple (dòng đã xử lý, số video đã kiểm tra, số video đã thay thế, số video có trong bài viết)
+        Tuple (danh sách dòng mới, số lượng video đã kiểm tra, số lượng video đã thay thế, tổng số video)
     """
-    modified_lines = []
+    new_lines = []
     checked_count = 0
     replaced_count = 0
-    video_count = 0
-    
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        
-        # Kiểm tra xem dòng có phải là URL không
-        if re.match(URL_PATTERN, line) and not line.startswith('EMBED:'):
+    video_line_count = 0 # Count lines identified as video URLs initially
+
+    for i, line in enumerate(lines):
+        # Bỏ qua các dòng trống hoặc chỉ chứa khoảng trắng
+        if not line.strip():
+            new_lines.append(line)
+            continue
+
+        # Xử lý dòng nếu là URL (hoặc tiềm năng là URL)
+        # Check if line looks like a URL pattern before processing fully
+        if re.match(URL_PATTERN, line.split(',')[0].strip()):
             processed_line, is_video, replaced = process_url_line(
-                line, i+1, video_searcher, keywords
+                line, i + 1, video_searcher, keywords, creative_commons_only
             )
-            
+
             if is_video:
+                video_line_count += 1
                 checked_count += 1
-                video_count += 1
                 if replaced:
                     replaced_count += 1
-            
-            # Xử lý trường hợp khi processed_line chứa nhiều dòng (URL + embed)
-            if '\n' in processed_line:
-                new_lines = processed_line.split('\n')
-                modified_lines.extend(new_lines)
+                # Only add the line back if processing didn't result in None
+                if processed_line is not None:
+                    new_lines.append(processed_line)
+                # Else: line is omitted because processing failed
             else:
-                modified_lines.append(processed_line)
+                # Not a video URL line, keep it
+                new_lines.append(line)
         else:
-            modified_lines.append(line)
-            
-        i += 1
-    
-    return modified_lines, checked_count, replaced_count, video_count
+            # Not a URL line, keep it
+            new_lines.append(line)
+
+    final_video_count = sum(1 for ln in new_lines if is_video_url(ln.split(',')[0].strip()))
+    logger.info(f"Processed {video_line_count} initial video lines. Checked: {checked_count}, Replaced: {replaced_count}. Final video lines: {final_video_count}")
+    return new_lines, checked_count, replaced_count, final_video_count
 
 
 def add_additional_videos(
     lines: List[str],
     keywords: str,
     video_searcher: VideoSearch,
-    min_videos: int = 3
+    min_videos: int = 3,
+    creative_commons_only: bool = True
 ) -> List[str]:
     """
-    Thêm video bổ sung vào bài viết cho đến khi đạt số lượng tối thiểu
-    
+    Thêm video bổ sung nếu bài viết chưa đủ số lượng video yêu cầu.
+    Skips adding if no suitable Creative Commons video is found.
+
     Args:
-        lines: Danh sách các dòng trong bài viết đã xử lý
-        keywords: Từ khóa để tìm kiếm video
+        lines: Danh sách các dòng hiện tại
+        keywords: Từ khóa tìm kiếm
         video_searcher: Đối tượng VideoSearch
-        min_videos: Số lượng video tối thiểu cần có trong bài viết
-        
+        min_videos: Số lượng video tối thiểu cần có
+        creative_commons_only: Chỉ tìm video Creative Commons
+
     Returns:
-        Danh sách các dòng sau khi thêm video
+        Danh sách dòng mới với video bổ sung (nếu có)
     """
-    logger.info(f"Adding additional videos to reach minimum of {min_videos} videos")
-    
-    # Tìm vị trí thích hợp để thêm video
-    # Thêm video vào trước phần nội dung chính
-    # Tìm các đặc điểm của phần nội dung như dòng trống, dòng đếm từ, hoặc dòng bắt đầu đoạn văn
-    insert_position = 0
-    
-    # Tìm vị trí của các URL video hiện có
-    existing_video_positions = []
-    for i, line in enumerate(lines):
-        if line.startswith('http') and is_video_url(line.split(',')[0].strip()):
-            existing_video_positions.append(i)
-    
-    if existing_video_positions:
-        # Nếu đã có video, chèn vào sau video cuối cùng hiện có
-        insert_position = existing_video_positions[-1] + 1
-        
-        # Điều chỉnh vị trí nếu ngay sau video là hình ảnh
-        while insert_position < len(lines) and lines[insert_position].startswith('http'):
-            insert_position += 1
-            
-        # Thêm một dòng trống nếu không có
-        if insert_position < len(lines) and lines[insert_position] != "":
-            lines.insert(insert_position, "")
-            insert_position += 1
-    else:
-        # Nếu không có video nào, tìm vị trí sau phần metadata và thumbnail
-        for i, line in enumerate(lines):
-            if line.startswith('-') and 'từ' in line:  # Dòng đếm từ
-                insert_position = i
-                break
-            elif i > 5 and line == "" and i+1 < len(lines) and lines[i+1] != "" and not lines[i+1].startswith(('http', '+', '#')):
-                # Dòng trống trước nội dung chính
-                insert_position = i
-                break
-    
-    # Nếu không tìm thấy vị trí thích hợp, thêm vào đầu bài viết sau phần metadata
-    if insert_position == 0:
-        for i, line in enumerate(lines):
-            if i > 3 and line == "" and i+1 < len(lines) and lines[i+1].startswith('+'):
-                insert_position = i
-                break
-    
-    # Số lượng video cần thêm
-    videos_to_add = min_videos - len([l for l in lines if is_video_url(l.split(',')[0].strip()) and not l.startswith('EMBED:')])
-    
+    # Đếm số lượng video hiện có
+    current_video_count = sum(1 for line in lines if is_video_url(line.split(',')[0].strip()))
+    logger.info(f"Current video count: {current_video_count}. Minimum required: {min_videos}")
+
+    videos_to_add = min_videos - current_video_count
+
     if videos_to_add <= 0:
-        logger.info("No additional videos needed")
+        logger.info("Article already meets or exceeds minimum video count.")
         return lines
-    
-    logger.info(f"Need to add {videos_to_add} more videos at position {insert_position}")
-    
-    # Thêm mỗi video
-    videos_added = 0
-    attempts = 0
-    max_attempts = videos_to_add * 3  # Giới hạn số lần thử để tránh vòng lặp vô hạn
-    
-    while videos_added < videos_to_add and attempts < max_attempts:
-        attempts += 1
-        
-        # Tìm video mới
-        logger.debug(f"Searching for additional video {videos_added + 1}/{videos_to_add}")
-        alt_video = video_searcher.get_alternative_video(keywords)
-        
+
+    logger.info(f"Attempting to add {videos_to_add} additional Creative Commons video(s).")
+
+    added_count = 0
+    # Avoid infinite loops, limit attempts
+    max_attempts = videos_to_add * 3 # Try up to 3 times per needed video
+
+    for attempt in range(max_attempts):
+        if added_count >= videos_to_add:
+            break # Added enough videos
+
+        logger.debug(f"Attempt {attempt + 1} to find additional video using keywords: '{keywords}'")
+
+        # Tìm video thay thế CC
+        search_start_time = time.time()
+        # Ensure creative_commons_only=True is passed here explicitly
+        alt_video = video_searcher.get_alternative_video(keywords, creative_commons_only=True)
+        search_time = time.time() - search_start_time
+
         if alt_video and 'url' in alt_video:
             new_url = alt_video['url']
-            
-            # Kiểm tra xem URL này đã có trong bài viết chưa
-            if new_url in '\n'.join(lines):
-                logger.debug(f"Video URL already exists in article, skipping: {new_url}")
+            license_info = alt_video.get('license', 'creative_commons') # Assume CC
+            logger.info(f"Found additional Creative Commons video in {search_time:.2f}s: {new_url} (License: {license_info})")
+
+            # Check if this video URL is already in the article
+            if any(new_url in line for line in lines):
+                logger.debug(f"Video {new_url} already exists in the article, skipping.")
                 continue
-                
-            logger.info(f"Adding new video: {new_url}")
-            
-            # Tạo dòng mới với cấu trúc phù hợp (URL + tham số)
-            # Format: URL,10-16;25-31;40-46,crop:300-0-1920-820,excludes=0-10;16-25;31-40;46-60
-            
-            # Lấy thời lượng thực tế từ video nếu có, nếu không thì sử dụng giá trị mặc định là 60s
-            video_duration = alt_video.get('duration', 60)
-            logger.debug(f"Video duration: {video_duration} seconds")
-            
-            # Đảm bảo video_duration là một số hợp lệ và > 20 giây
-            try:
-                video_duration = int(video_duration)
-                if video_duration < 20:
-                    video_duration = 60  # Nếu video quá ngắn, sử dụng giá trị mặc định
-            except (ValueError, TypeError):
-                video_duration = 60  # Nếu không chuyển đổi được, sử dụng giá trị mặc định
-                
-            logger.debug(f"Using video duration: {video_duration} seconds for segment calculation")
-            
-            # Giới hạn thời lượng tối đa để tránh vùng outro (thường ở cuối video)
-            max_end_time = min(video_duration - 5, 120)  # Giới hạn tối đa 120s hoặc trước outro 5s
-            
-            # Tạo 3 đoạn thời gian ngẫu nhiên, mỗi đoạn 6 giây
-            segments = []
-            
-            # Đảm bảo các đoạn không vượt quá thời lượng video
-            # Đoạn đầu tiên bắt đầu từ giây thứ 5 trở đi để tránh phần intro
-            max_start1 = min(video_duration // 4, 15)  # 1/4 đầu video hoặc tối đa 15s
-            start1 = random.randint(5, max_start1)
-            end1 = min(start1 + 6, max_end_time)
-            segments.append((start1, end1))
-            
-            # Đoạn thứ hai bắt đầu từ giữa video
-            max_start2 = min(video_duration // 2, 45)  # Nửa video hoặc tối đa 45s
-            start2 = random.randint(end1 + 5, max_start2)
-            end2 = min(start2 + 6, max_end_time)
-            segments.append((start2, end2))
-            
-            # Đoạn thứ ba bắt đầu gần cuối nhưng tránh outro
-            max_start3 = min(video_duration * 3 // 4, 90)  # 3/4 video hoặc tối đa 90s
-            start3 = random.randint(end2 + 5, max_start3)
-            end3 = min(start3 + 6, max_end_time)
-            segments.append((start3, end3))
-            
-            # Loại bỏ các segment không hợp lệ (nếu video quá ngắn)
-            segments = [(start, end) for start, end in segments if start < end and end <= max_end_time]
-            
-            # Nếu không có segment nào hợp lệ, tạo một segment mặc định
-            if not segments:
-                segments = [(5, 11)]
-            
-            # Sắp xếp các đoạn theo thứ tự thời gian
-            segments.sort()
-            
-            # Tạo chuỗi thời gian theo định dạng "start1-end1;start2-end2;start3-end3"
-            time_ranges = ";".join([f"{start}-{end}" for start, end in segments])
-            
-            # Tạo danh sách excludes để loại bỏ các khoảng giữa các đoạn đã chọn
-            excludes = []
-            
-            # Loại bỏ phần đầu (0s đến đoạn đầu tiên)
-            if segments[0][0] > 0:
-                excludes.append(f"0-{segments[0][0]}")
-                
-            # Loại bỏ các khoảng giữa các đoạn
-            for i in range(len(segments) - 1):
-                excludes.append(f"{segments[i][1]}-{segments[i+1][0]}")
-                
-            # Loại bỏ phần cuối (từ đoạn cuối đến hết)
-            excludes.append(f"{segments[-1][1]}-{video_duration}")
-            
-            # Tạo chuỗi excludes
-            excludes_str = "excludes=" + ";".join(excludes)
-            
-            # Khung hình cắt theo yêu cầu
-            crop = "crop:300-0-1920-820"
-            
-            # Tạo dòng URL hoàn chỉnh với tham số
-            formatted_url = f"{new_url},{time_ranges},{crop},{excludes_str}"
-            
-            logger.debug(f"Created video URL with time segments: {time_ranges}")
-            logger.debug(f"Excludes: {excludes_str}")
-            
-            # Thêm dòng mới
-            new_lines = []
-            new_lines.append("")  # Dòng trống trước video
-            new_lines.append(formatted_url)
-            
-            # Chèn vào vị trí đã xác định
-            lines[insert_position:insert_position] = new_lines
-            insert_position += len(new_lines)
-            videos_added += 1
+
+            # Tạo dòng mới với URL và tham số mặc định
+            duration = alt_video.get('duration', 60)
+            if duration > 60:
+                start = max(10, int(duration * 0.2))
+                end = min(start + 20, int(duration * 0.8))
+                excludes = f"0-{start};{end}-{duration}"
+                crop_param = "crop:300-0-1920-820" # Keep default for now
+                new_line = f"{new_url},{start}-{end},{crop_param},excludes={excludes}"
+            else:
+                crop_param = "crop:300-0-1920-820" # Keep default for now
+                new_line = f"{new_url},{crop_param}"
+
+            logger.debug(f"Adding new video line: {new_line}")
+            lines.append(new_line)
+            added_count += 1
         else:
-            logger.warning(f"Failed to find additional video for '{keywords}'")
-            # Tạm dừng để tránh gửi quá nhiều requests
-            time.sleep(1)
-    
-    if videos_added > 0:
-        logger.info(f"Successfully added {videos_added} videos to the article")
-    else:
-        logger.warning("Could not add any additional videos to the article")
-        
+            # Failed to find an alternative video this time
+            logger.warning(f"Could not find suitable additional Creative Commons video (Attempt {attempt + 1}).")
+            # No fallback, just continue trying if attempts remain
+
+    if added_count < videos_to_add:
+        logger.warning(f"Could only add {added_count} out of {videos_to_add} requested additional videos.")
+
     return lines
 
 
@@ -477,12 +410,13 @@ def validate_input(data: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
     return article, title
 
 
-def video_processor(data: Dict[str, Any]) -> Dict[str, Any]:
+def video_processor(data: Dict[str, Any], creative_commons_only: bool = True) -> Dict[str, Any]:
     """
     Xử lý và xác thực video trong bài viết
     
     Args:
         data (dict): Dữ liệu bài viết đã được trích xuất
+        creative_commons_only: Chỉ sử dụng video có giấy phép Creative Commons
         
     Returns:
         dict: Dữ liệu bài viết đã được xử lý video hoặc dữ liệu gốc nếu không thành công
@@ -503,12 +437,16 @@ def video_processor(data: Dict[str, Any]) -> Dict[str, Any]:
     logger.debug(f"Article split into {len(lines)} lines")
     
     # Trích xuất từ khóa từ bài viết
-    keywords = extract_keywords(lines, title)
-    logger.info(f"Using keywords for video search: '{keywords}'")
+    full_keywords = extract_keywords(lines, title)
+    
+    # Select 1-2 random keywords from the full set
+    keywords = select_random_keywords(full_keywords)
+    license_text = "Creative Commons" if creative_commons_only else "Standard"
+    logger.info(f"Using random keywords for video search: '{keywords}' (from full keywords: '{full_keywords}', License: {license_text})")
     
     # Xử lý các dòng trong bài viết
     modified_lines, checked_count, replaced_count, video_count = process_article_lines(
-        lines, keywords, video_searcher
+        lines, keywords, video_searcher, creative_commons_only
     )
     
     # Kiểm tra xem có đủ số lượng video tối thiểu không (ít nhất 3 video)
@@ -518,13 +456,13 @@ def video_processor(data: Dict[str, Any]) -> Dict[str, Any]:
     if video_count < MIN_VIDEOS:
         # Thêm video cho đến khi đạt số lượng tối thiểu
         logger.info(f"Adding {MIN_VIDEOS - video_count} more videos to reach minimum")
-        modified_lines = add_additional_videos(modified_lines, keywords, video_searcher, MIN_VIDEOS)
+        modified_lines = add_additional_videos(modified_lines, keywords, video_searcher, MIN_VIDEOS, creative_commons_only)
     
     # Nối các dòng lại thành bài viết
     data["article"] = '\n'.join(modified_lines)
     
     # Ghi log thông tin xử lý
     processing_time = time.time() - start_time
-    logger.info(f"Video processing complete. Checked {checked_count} videos, replaced {replaced_count} unreachable videos, ensured minimum {MIN_VIDEOS} videos in {processing_time:.2f}s")
+    logger.info(f"Video processing complete in {processing_time:.2f}s")
     
     return data 

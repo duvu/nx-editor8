@@ -70,3 +70,5 @@ def s2j_processor(data):
         }
         logger.warning("Returning error JSON instead of None")
         return error_json 
+
+        

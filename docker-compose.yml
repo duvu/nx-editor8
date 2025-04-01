@@ -3,7 +3,7 @@ version: '3.8'
 services:
   nx-editor:
     build: .
-    image: docker.x51.vn/nx/nx-editor8:1.2.1
+    image: docker.x51.vn/nx/nx-editor8:1.2.2.5
     container_name: nx-editor
     restart: unless-stopped
     environment:
@@ -12,7 +12,7 @@ services:
       - RABBITMQ_PORT=5672
       - RABBITMQ_USER=guest
       - RABBITMQ_PASS=guest
-      - RABBITMQ_VHOST=/
+      - RABBITMQ_VHOST=nx-crawler
       - INPUT_QUEUE=nx_01_ai_queue
       - OUTPUT_QUEUE=nx_02_queue
 

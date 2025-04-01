@@ -18,7 +18,7 @@ from urllib.parse import urlparse, parse_qs, quote_plus
 
 import requests
 import yt_dlp
-from ..logger import logger
+from src.logger import logger
 
 
 
@@ -109,13 +109,14 @@ class VideoSearch:
         
         logger.info("VideoSearch initialized")
         
-    def search_videos(self, keywords: str, max_results: int = 5) -> List[Dict[str, Any]]:
+    def search_videos(self, keywords: str, max_results: int = 5, creative_commons_only: bool = False) -> List[Dict[str, Any]]:
         """
         Tìm kiếm video YouTube dựa trên từ khóa
         
         Args:
             keywords: Từ khóa tìm kiếm
             max_results: Số lượng kết quả tối đa
+            creative_commons_only: Chỉ trả về video có giấy phép Creative Commons
             
         Returns:
             Danh sách thông tin video
@@ -123,18 +124,28 @@ class VideoSearch:
         if not keywords:
             return []
             
-        logger.info(f"Searching videos for keywords: '{keywords}', max results: {max_results}")
+        # Determine the search query and YT-DLP search target URL
+        search_keywords = keywords
+        search_target = f"ytsearch{max_results * 2}:{search_keywords}" # Search more initially to filter later
+        
+        if creative_commons_only:
+            # Use YouTube search filter for Creative Commons
+            search_target = f"ytsearch{max_results * 4}:{search_keywords},creativecommons" # Search even more for CC
+            logger.info(f"Searching for Creative Commons videos using filter: '{search_keywords}', target: {search_target}")
+        else:
+            logger.info(f"Searching videos for keywords: '{keywords}', max results: {max_results}, target: {search_target}")
+        
         start_time = time.time()
         
         try:
-            # Tìm kiếm video trên YouTube
-            search_results = self._search_youtube_videos(keywords)
+            # Tìm kiếm video trên YouTube using the constructed target
+            search_results = self._search_youtube_videos(search_target) # Pass the target URL directly
             
             if not search_results:
-                logger.warning(f"No search results found for keywords: '{keywords}'")
+                logger.warning(f"No search results found for target: '{search_target}'")
                 return []
                 
-            logger.info(f"Found {len(search_results)} initial results for query: '{keywords}'")
+            logger.info(f"Found {len(search_results)} initial results for target: '{search_target}'")
             
             # Lọc và xử lý kết quả tìm kiếm
             processed_videos = []
@@ -163,9 +174,15 @@ class VideoSearch:
                     'embed_url': f"https://www.youtube.com/embed/{video_id}",
                     'platform': 'youtube',
                     'resolution': self._estimate_resolution(video_data),
-                    'source': 'youtube_search'
+                    'source': 'youtube_search',
+                    'license': video_data.get('license', 'unknown')
                 }
                 
+                # Nếu chỉ tìm Creative Commons, VẪN kiểm tra giấy phép để xác nhận
+                if creative_commons_only and not self._is_creative_commons(video_data):
+                    logger.debug(f"Skipping video despite CC filter (failed validation): {video_info['title']}")
+                    continue
+                    
                 processed_videos.append(video_info)
                 
                 # Dừng nếu đã đủ số lượng kết quả
@@ -173,7 +190,7 @@ class VideoSearch:
                     break
             
             elapsed_time = time.time() - start_time
-            logger.info(f"Found {len(processed_videos)} suitable videos for query: '{keywords}' in {elapsed_time:.2f} seconds")
+            logger.info(f"Found {len(processed_videos)} suitable videos for query: '{search_keywords}' (CC: {creative_commons_only}) in {elapsed_time:.2f} seconds")
             
             return processed_videos
             
@@ -182,22 +199,19 @@ class VideoSearch:
             logger.error(f"Stack trace: {traceback.format_exc()}")
             return []
     
-    def _search_youtube_videos(self, query: str) -> List[Dict[str, Any]]:
+    def _search_youtube_videos(self, search_target: str) -> List[Dict[str, Any]]:
         """
         Tìm kiếm video trên YouTube sử dụng yt-dlp
-        
+
         Args:
-            query: Từ khóa tìm kiếm
-            
+            search_target: Chuỗi tìm kiếm yt-dlp (e.g., "ytsearch20:query,filter")
+
         Returns:
-            Danh sách thông tin video
+            Danh sách thông tin video hoặc danh sách rỗng nếu lỗi
         """
-        logger.info(f"Searching YouTube for: '{query}'")
-        
+        logger.info(f"Searching YouTube using target: '{search_target}'")
+
         try:
-            # Tạo URL tìm kiếm YouTube
-            search_url = f"ytsearch20:{query}"  # Tìm 20 kết quả
-            
             # Cấu hình yt-dlp cho tìm kiếm
             ydl_opts = {
                 **self.ytdlp_options,
@@ -214,118 +228,66 @@ class VideoSearch:
                     }
                 }
             }
-            
+
             # Thực hiện tìm kiếm
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    search_results = ydl.extract_info(search_url, download=False)
-                    
+                    search_results = ydl.extract_info(search_target, download=False)
+
                     if not search_results or 'entries' not in search_results:
-                        logger.warning(f"No results found or invalid response for query: '{query}'")
-                        return self._fallback_search(query)
-                    
+                        logger.warning(f"No results found or invalid response for target: '{search_target}'")
+                        # REMOVED FALLBACK CALL
+                        return []
+
                     logger.info(f"YouTube search returned {len(search_results['entries'])} results")
-                    
+
                     # Filter out None entries
                     valid_entries = [entry for entry in search_results['entries'] if entry is not None]
-                    
+
                     if not valid_entries:
-                        logger.warning("All entries from YouTube search were None")
-                        return self._fallback_search(query)
-                        
+                        logger.warning(f"All entries from YouTube search were None for target: '{search_target}'")
+                        # REMOVED FALLBACK CALL
+                        return []
+
                     return valid_entries
             except Exception as e:
-                logger.error(f"Error with yt-dlp search: {str(e)}")
-                return self._fallback_search(query)
-                
+                logger.error(f"Error with yt-dlp search for target '{search_target}': {str(e)}")
+                # REMOVED FALLBACK CALL
+                return []
+
         except Exception as e:
-            logger.error(f"Error during YouTube search: {str(e)}")
+            logger.error(f"Error during YouTube search setup for target '{search_target}': {str(e)}")
             logger.error(f"Stack trace: {traceback.format_exc()}")
             return []
-            
-    def _fallback_search(self, query: str) -> List[Dict[str, Any]]:
-        """
-        Fallback method for searching videos when yt-dlp fails
-        
-        Args:
-            query: Từ khóa tìm kiếm
-            
-        Returns:
-            Danh sách thông tin video
-        """
-        logger.info(f"Using fallback search method for query: '{query}'")
-        
-        try:
-            # Create fake results for testing
-            results = []
-            
-            # First video
-            video1 = {
-                'id': 'dQw4w9WgXcQ',  # Rick Astley - Never Gonna Give You Up
-                '_type': 'url',
-                'url': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-                'title': f'Nature Documentary: {query}',
-                'description': f'Beautiful {query} footage in HD quality',
-                'duration': 212,
-                'view_count': 10000000,
-                'upload_date': '20220101',
-                'channel': 'Nature Channel',
-                'channel_url': 'https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw'
-            }
-            
-            # Second video
-            video2 = {
-                'id': 'LXb3EKWsInQ',  # Another popular video
-                '_type': 'url',
-                'url': 'https://www.youtube.com/watch?v=LXb3EKWsInQ',
-                'title': f'Wildlife in 4K: {query}',
-                'description': f'Amazing {query} in ultra HD resolution',
-                'duration': 315,
-                'view_count': 5000000,
-                'upload_date': '20221215',
-                'channel': 'Wildlife Documentaries',
-                'channel_url': 'https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw'
-            }
-            
-            results.append(video1)
-            results.append(video2)
-            
-            logger.info(f"Fallback search created {len(results)} mock results")
-            return results
-            
-        except Exception as e:
-            logger.error(f"Error in fallback search: {str(e)}")
-            return []
-    
+
     def get_video_info(self, url: str) -> Optional[Dict[str, Any]]:
         """
         Lấy thông tin đầy đủ của video từ URL
-        
         Args:
             url: URL của video
-            
         Returns:
             Thông tin video hoặc None nếu không lấy được
         """
         if not url:
             logger.warning("Empty URL provided to get_video_info")
             return None
-            
+
         logger.info(f"Getting video info for URL: {url}")
         start_time = time.time()
-        
+
         try:
             # Kiểm tra URL hợp lệ
             if not self._is_youtube_url(url):
                 logger.warning(f"URL is not a YouTube video: {url}")
+                # Return minimal info for non-YouTube or None if ID extraction fails
                 return self._create_minimal_video_info(url)
-            
+
             # Extract video ID from URL
             video_id = self._extract_youtube_id(url)
             if not video_id:
                 logger.warning(f"Could not extract video ID from URL: {url}")
-                return self._create_minimal_video_info(url)
-            
+                return None # Changed from minimal info
+
             # Enhanced options for yt-dlp
             ydl_opts = {
                 **self.ytdlp_options,
@@ -341,24 +303,25 @@ class VideoSearch:
                     }
                 }
             }
-            
+
             # Try to get video info with yt-dlp first
             try:
                 # Sử dụng yt-dlp để lấy thông tin video
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=False)
-                    
+
                     if not info:
-                        logger.warning(f"Could not extract info for URL: {url}")
-                        return self._fallback_video_info(video_id, url)
-                    
+                        logger.warning(f"Could not extract info via yt-dlp for URL: {url}")
+                        # REMOVED FALLBACK CALL
+                        return None
+
                     # Tạo thông tin video
                     video_info = {
                         'id': video_id,
                         'url': url,
-                        'title': info.get('title', 'Unknown Title'),
+                        'title': info.get('title', f'YouTube Video {video_id}'), # Use ID if title missing
                         'description': info.get('description', ''),
-                        'thumbnail': self._get_best_thumbnail(info),
+                        'thumbnail': self._get_best_thumbnail(info) or self._get_thumbnail_url(video_id),
                         'duration': info.get('duration', 0),
                         'view_count': info.get('view_count', 0),
                         'upload_date': self._format_date(info.get('upload_date', '')),
@@ -367,72 +330,30 @@ class VideoSearch:
                         'embed_url': f"https://www.youtube.com/embed/{video_id}",
                         'platform': 'youtube',
                         'resolution': self._get_max_resolution(info),
+                        'license': info.get('license', 'unknown'), # Include license info
                         'source': 'yt_dlp'
                     }
-                    
+
                     elapsed_time = time.time() - start_time
-                    logger.info(f"Video info retrieved in {elapsed_time:.2f} seconds")
+                    logger.info(f"Video info retrieved via yt-dlp in {elapsed_time:.2f} seconds")
                     return video_info
             except Exception as e:
-                logger.error(f"Error with yt-dlp video info: {str(e)}")
-                return self._fallback_video_info(video_id, url)
-                
+                logger.error(f"Error with yt-dlp video info extraction for {url}: {str(e)}")
+                # REMOVED FALLBACK CALL
+                return None
+
         except Exception as e:
-            logger.error(f"Error getting video info: {str(e)}")
+            logger.error(f"Error getting video info for {url}: {str(e)}")
             logger.error(f"Stack trace: {traceback.format_exc()}")
-            
-            # Tạo thông tin tối thiểu nếu có lỗi
-            return self._create_minimal_video_info(url)
-            
-    def _fallback_video_info(self, video_id: str, url: str) -> Dict[str, Any]:
-        """
-        Create fallback video info when yt-dlp fails
-        
-        Args:
-            video_id: YouTube video ID
-            url: Video URL
-            
-        Returns:
-            Video info dictionary
-        """
-        logger.info(f"Creating fallback video info for video ID: {video_id}")
-        
-        # Create a more detailed fallback info than minimal
-        return {
-            'id': video_id,
-            'url': url,
-            'title': f'YouTube Video: {video_id}',
-            'description': 'Video description not available due to SSL certificate issues in Docker environment',
-            'thumbnail': self._get_thumbnail_url(video_id),
-            'duration': 300,  # Assumed 5 minutes
-            'view_count': 10000,
-            'upload_date': '2023-01-01',
-            'channel': 'Unknown Channel',
-            'channel_url': '',
-            'embed_url': f"https://www.youtube.com/embed/{video_id}",
-            'platform': 'youtube',
-            'resolution': 720,  # Assumed HD
-            'source': 'fallback_ssl_issue'
-        }
-    
+            return None
+
     def _create_minimal_video_info(self, url: str) -> Optional[Dict[str, Any]]:
-        """
-        Tạo thông tin tối thiểu cho video khi không thể lấy đầy đủ
-        
-        Args:
-            url: URL của video
-            
-        Returns:
-            Thông tin video tối thiểu
-        """
+        # Keep this helper, but it's now only for non-YouTube URLs or when ID extraction fails in get_video_info
         logger.info(f"Creating minimal video info for URL: {url}")
-        
         try:
-            # Lấy video ID nếu là YouTube
             video_id = self._extract_youtube_id(url)
-            
             if video_id:
-                # Tạo thông tin cơ bản cho video YouTube
+                # This case might be redundant now if get_video_info returns None on ID failure
                 return {
                     'id': video_id,
                     'url': url,
@@ -447,13 +368,12 @@ class VideoSearch:
                     'embed_url': f"https://www.youtube.com/embed/{video_id}",
                     'platform': 'youtube',
                     'resolution': 0,
-                    'source': 'minimal'
+                    'source': 'minimal_yt_id'
                 }
             else:
-                # URL không phải YouTube, tạo thông tin chung
+                # URL is not YouTube or ID extraction failed
                 parsed_url = urlparse(url)
-                domain = parsed_url.netloc
-                
+                domain = parsed_url.netloc or 'unknown domain'
                 return {
                     'id': '',
                     'url': url,
@@ -468,13 +388,12 @@ class VideoSearch:
                     'embed_url': url,
                     'platform': 'unknown',
                     'resolution': 0,
-                    'source': 'minimal'
+                    'source': 'minimal_non_yt'
                 }
-                
         except Exception as e:
-            logger.error(f"Error creating minimal video info: {str(e)}")
+            logger.error(f"Error creating minimal video info for {url}: {str(e)}")
             return None
-    
+
     def is_video_url_accessible(self, url: str, timeout: int = 10) -> bool:
         """
         Kiểm tra xem URL video có thể truy cập được không
@@ -511,164 +430,157 @@ class VideoSearch:
             logger.error(f"Error checking URL accessibility: {str(e)}")
             return False
     
-    def get_alternative_video(self, keywords: str) -> Optional[Dict[str, Any]]:
+    def get_alternative_video(self, keywords: str, creative_commons_only: bool = False) -> Optional[Dict[str, Any]]:
         """
-        Tìm video thay thế khi không tìm thấy video phù hợp
-        
+        Tìm video thay thế khi không tìm thấy video phù hợp.
+        Returns None if no suitable video is found (no fallback).
+
         Args:
             keywords: Từ khóa tìm kiếm
-            
+            creative_commons_only: Chỉ tìm video có giấy phép Creative Commons
+
         Returns:
             Thông tin video thay thế hoặc None nếu không tìm thấy
         """
         if not keywords:
             logger.warning("No keywords provided for alternative video search, using default")
             keywords = "nature documentary HD"
-        
-        logger.info(f"Searching for alternative video with keywords: '{keywords}'")
-        
-        # Thêm "HD" vào từ khóa nếu chưa có
+
+        license_type = "Creative Commons" if creative_commons_only else "Standard"
+        logger.info(f"Searching for alternative {license_type} video with keywords: '{keywords}'")
+
+        # Prepare search query/target
+        search_query = keywords
         if "HD" not in keywords.upper():
             search_query = f"{keywords} HD"
+
+        if creative_commons_only:
+            search_target = f"ytsearch12:{search_query},creativecommons"
+            logger.info(f"Using search target: '{search_target}'")
         else:
-            search_query = keywords
-        
+            search_target = f"ytsearch12:{search_query}"
+            logger.info(f"Using search target: '{search_target}'")
+
         try:
             # Tìm kiếm video trên YouTube
-            results = self._search_youtube_videos(search_query)
-            
-            if not results or len(results) == 0:
-                logger.warning(f"No alternative videos found for keywords: '{search_query}'")
-                return self._fallback_alternative_video(search_query)
-                
-            logger.info(f"Found {len(results)} alternative videos")
-            
-            # Check if we have valid results
-            valid_results = [r for r in results if r is not None]
+            results = self._search_youtube_videos(search_target)
+
+            if not results:
+                logger.warning(f"No alternative videos found for target: '{search_target}'")
+                # REMOVED FALLBACK CALL
+                return None
+
+            logger.info(f"Found {len(results)} potential alternative videos")
+
+            # Select a random video from the results (apply CC filter if needed)
+            valid_results = results # Start with all results
+
+            if creative_commons_only:
+                # Filter for CC *after* search, using metadata check as confirmation
+                cc_results = []
+                for r in valid_results:
+                    # Need more info than search results provide for robust CC check
+                    # Let's get full info for a few candidates
+                    video_id_alt = r.get('id') or self._extract_youtube_id(r.get('url', ''))
+                    if video_id_alt:
+                        info = self.get_video_info(f"https://www.youtube.com/watch?v={video_id_alt}")
+                        if info and self._is_creative_commons(info):
+                            cc_results.append(info) # Append the full info dict
+                            if len(cc_results) >= 5: # Limit checks
+                                break
+                    else:
+                        logger.debug("Skipping result with no ID for CC check.")
+
+                if not cc_results:
+                    logger.warning(f"No confirmed Creative Commons videos found among results for '{search_target}'")
+                    # REMOVED FALLBACK CALL
+                    return None
+                valid_results = cc_results # Use the confirmed CC videos (full info)
+                logger.info(f"Found {len(valid_results)} confirmed Creative Commons videos")
+            else:
+                 # For standard search, we still need full info for one video
+                 pass # Handled below when selecting
+
             if not valid_results:
-                logger.warning("All search results are None")
-                return self._fallback_alternative_video(search_query)
-                
-            # Ensure we don't go out of bounds
-            max_index = min(5, len(valid_results) - 1)
-            if max_index < 0:
-                logger.warning("No valid results found for alternative video")
-                return self._fallback_alternative_video(search_query)
-                
-            # Chọn ngẫu nhiên một video từ kết quả
-            selected_index = random.randint(0, max_index)  # Chọn trong 5 kết quả đầu tiên
-            selected_result = valid_results[selected_index]
-            
-            if not selected_result:
-                logger.warning("Selected result is None")
-                return self._fallback_alternative_video(search_query)
-                
-            video_id = None
-            # Check for ID first
-            if selected_result.get('id'):
-                video_id = selected_result.get('id')
-            # If no ID, try to extract from URL
-            elif selected_result.get('url'):
-                video_id = self._extract_youtube_id(selected_result.get('url'))
-            
-            if not video_id:
-                logger.warning("Could not extract video ID from selected result")
-                return self._fallback_alternative_video(search_query)
-            
-            # Tạo URL từ video ID
-            video_url = f"https://www.youtube.com/watch?v={video_id}"
-            
-            # Lấy thông tin đầy đủ của video
-            return self.get_video_info(video_url)
-            
+                 logger.warning(f"No valid results remain after filtering for target: '{search_target}'")
+                 return None
+
+            # Select a random video from the valid results
+            selected_result_data = random.choice(valid_results)
+
+            # If we already have full info (from CC check), return it
+            if isinstance(selected_result_data, dict) and selected_result_data.get('source') == 'yt_dlp':
+                 logger.info(f"Returning selected alternative video (already fetched): {selected_result_data.get('title')}")
+                 return selected_result_data
+
+            # Otherwise (standard search or initial CC search data), get full info now
+            video_id_final = selected_result_data.get('id') or self._extract_youtube_id(selected_result_data.get('url', ''))
+            if not video_id_final:
+                 logger.warning("Could not get ID from randomly selected result.")
+                 return None
+
+            logger.info(f"Fetching full info for selected alternative video ID: {video_id_final}")
+            final_video_info = self.get_video_info(f"https://www.youtube.com/watch?v={video_id_final}")
+
+            if not final_video_info:
+                 logger.warning(f"Failed to get full info for selected alternative video ID: {video_id_final}")
+                 return None
+
+            logger.info(f"Returning selected alternative video: {final_video_info.get('title')}")
+            return final_video_info
+
         except Exception as e:
-            logger.error(f"Error getting alternative video: {str(e)}")
+            logger.error(f"Error getting alternative video for '{keywords}': {str(e)}")
             logger.error(f"Stack trace: {traceback.format_exc()}")
-            return self._fallback_alternative_video(keywords)
-            
-    def _fallback_alternative_video(self, keywords: str) -> Dict[str, Any]:
-        """
-        Create a fallback video for when searching fails in Docker
-        
-        Args:
-            keywords: Search keywords
-            
-        Returns:
-            Video info dictionary
-        """
-        logger.info(f"Creating fallback alternative video for keywords: '{keywords}'")
-        
-        # Use a reliable video ID for the fallback
-        video_id = "dQw4w9WgXcQ"  # Rick Astley's "Never Gonna Give You Up"
-        url = f"https://www.youtube.com/watch?v={video_id}"
-        
-        return {
-            'id': video_id,
-            'url': url,
-            'title': f'Nature Documentary: {keywords}',
-            'description': 'This fallback video is provided when SSL certificate verification fails in Docker',
-            'thumbnail': f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",
-            'duration': 212,
-            'view_count': 10000000,
-            'upload_date': '2023-01-01',
-            'channel': 'Nature Channel',
-            'channel_url': 'https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw',
-            'embed_url': f"https://www.youtube.com/embed/{video_id}",
-            'platform': 'youtube',
-            'resolution': 720,
-            'source': 'fallback_alternative'
-        }
-    
+            # REMOVED FALLBACK CALL
+            return None
+
     def get_embed_html(self, video_info: Dict[str, Any], width: int = 640, height: int = 360) -> str:
         """
         Tạo mã HTML để nhúng video
-        
         Args:
             video_info: Thông tin video từ get_video_info
             width: Chiều rộng của player
             height: Chiều cao của player
-            
         Returns:
             Mã HTML để nhúng video
         """
         if not video_info:
             logger.warning("No video info provided to get_embed_html")
-            return ""
-            
+            # Return placeholder if no info
+            return f'<div style="width:{width}px; height:{height}px; border:1px solid #ccc; background-color:#eee; display:flex; align-items:center; justify-content:center; font-family:sans-serif; color:#888;">Video Not Available</div>'
+
         embed_url = video_info.get('embed_url', '')
         url = video_info.get('url', '')
-        
-        if not embed_url and url:
-            # Tạo embed URL từ URL thông thường nếu là YouTube
+        title = video_info.get('title', 'Video')
+
+        if not embed_url and url and self._is_youtube_url(url):
             video_id = self._extract_youtube_id(url)
             if video_id:
                 embed_url = f"https://www.youtube.com/embed/{video_id}"
             else:
-                embed_url = url
-        
+                 embed_url = url # Fallback for non-YouTube if needed
+        elif not embed_url:
+             embed_url = url # Use original URL if no embed specific one
+
         if not embed_url:
-            logger.warning(f"No embed URL available for video: {video_info.get('title', 'Unknown')}")
-            
-            # Tạo mã HTML để hiển thị thông tin video khi không có URL nhúng
+            logger.warning(f"No embed URL available for video: {title}")
             thumbnail = video_info.get('thumbnail', '')
-            title = video_info.get('title', 'Unknown Video')
-            
-            # Tạo mã HTML hiển thị hình ảnh và tiêu đề thay vì video
+            # Return placeholder with title/thumbnail if no embed URL
             fallback_html = f"""
-            <div style="width: {width}px; height: {height}px; border: 1px solid #ccc; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #f9f9f9; text-align: center; padding: 10px; box-sizing: border-box;">
+            <div style="width: {width}px; height: {height}px; border: 1px solid #ccc; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #f9f9f9; text-align: center; padding: 10px; box-sizing: border-box; overflow: hidden;">
                 {f'<img src="{thumbnail}" alt="{title}" style="max-width: 90%; max-height: 70%; object-fit: contain; margin-bottom: 10px;">' if thumbnail else ''}
-                <h3 style="margin: 5px 0; font-family: Arial, sans-serif;">{title}</h3>
-                <p style="margin: 5px 0; font-family: Arial, sans-serif; font-size: 12px;">URL: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a></p>
-                <p style="color: #666; font-family: Arial, sans-serif; font-size: 12px;">Video không có sẵn mã nhúng</p>
+                <h3 style="margin: 5px 0; font-size: 14px; font-family: Arial, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95%;">{title}</h3>
+                {f'<p style="margin: 5px 0; font-family: Arial, sans-serif; font-size: 11px;">URL: <a href="{url}" target="_blank" rel="noopener noreferrer" style="color: #007bff;">Link</a></p>' if url else ''}
+                <p style="color: #666; font-family: Arial, sans-serif; font-size: 11px; margin-top: 5px;">Video embedding not available.</p>
             </div>
             """
-            
-            logger.debug(f"Created fallback HTML for video without embed URL")
+            logger.debug(f"Created fallback HTML display for video without embed URL")
             return fallback_html
-        
-        # Tạo mã HTML nhúng YouTube
-        return f'<iframe width="{width}" height="{height}" src="{embed_url}" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>'
-    
+
+        # Create embed iframe
+        return f'<iframe width="{width}" height="{height}" src="{embed_url}" title="{title}" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>'
+
     def _is_youtube_url(self, url: str) -> bool:
         """
         Kiểm tra xem URL có phải là video YouTube không
@@ -900,6 +812,58 @@ class VideoSearch:
             
         # Giá trị mặc định
         return 480  # Giả sử video có độ phân giải trung bình
+
+    def _is_creative_commons(self, video_data: Dict[str, Any]) -> bool:
+        """
+        Kiểm tra xem video có giấy phép Creative Commons không
+        
+        Args:
+            video_data: Thông tin video từ yt-dlp
+            
+        Returns:
+            True nếu video có giấy phép Creative Commons
+        """
+        # Kiểm tra thông tin giấy phép trong metadata nếu có
+        license_info = str(video_data.get('license', '')).lower()
+        if license_info and ('creative commons' in license_info or 'cc by' in license_info):
+            return True
+        
+        # Kiểm tra từ khóa trong tiêu đề
+        title = str(video_data.get('title', '')).lower()
+        if 'creative commons' in title or 'cc by' in title:
+            return True
+        
+        # Kiểm tra trong mô tả video
+        description = str(video_data.get('description', '')).lower()
+        cc_indicators = [
+            'licensed under creative commons', 
+            'cc-by', 
+            'cc by', 
+            'creative commons attribution',
+            'creative commons license'
+        ]
+        
+        for indicator in cc_indicators:
+            if indicator in description:
+                return True
+            
+        return False
+
+    def search_creative_commons_videos(self, keywords: str, max_results: int = 5) -> List[Dict[str, Any]]:
+        """
+        Tìm kiếm video YouTube có giấy phép Creative Commons.
+
+        Đây là một phương thức tiện lợi gọi search_videos với creative_commons_only=True.
+        
+        Args:
+            keywords: Từ khóa tìm kiếm
+            max_results: Số lượng kết quả tối đa
+            
+        Returns:
+            Danh sách thông tin video Creative Commons hoặc danh sách rỗng nếu không tìm thấy.
+        """
+        logger.info(f"Initiating Creative Commons video search for keywords: '{keywords}'")
+        return self.search_videos(keywords, max_results=max_results, creative_commons_only=True)
 
 # Ví dụ sử dụng
 if __name__ == "__main__":

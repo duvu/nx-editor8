@@ -1,0 +1,109 @@
+{
+  "category": "# Wildlife Documentary About African Savanna",
+  "title": null,
+  "keyword": [],
+  "src": null,
+  "description": null,
+  "unique_id": null,
+  "ads": null,
+  "playlist": [],
+  "test": false,
+  "speaker": null,
+  "upload": [
+    "youtube"
+  ],
+  "thumbnail": null,
+  "background_music": "track_random_1",
+  "video": [
+    {
+      "media_clips": [
+        {
+          "url": "https://www.youtube.com/watch?v=93_RIVO47mM",
+          "type": "video",
+          "pickes": [
+            {
+              "start": 33,
+              "end": 53
+            }
+          ],
+          "crop": "300-0-1920-820",
+          "excludes": [
+            {
+              "start": 0,
+              "end": 33
+            },
+            {
+              "start": 53,
+              "end": 168
+            }
+          ],
+          "effect": {}
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=jwHWfDzm95w",
+          "type": "video",
+          "pickes": [
+            {
+              "start": 66,
+              "end": 86
+            }
+          ],
+          "crop": "300-0-1920-820",
+          "excludes": [
+            {
+              "start": 0,
+              "end": 66
+            },
+            {
+              "start": 86,
+              "end": 334
+            }
+          ],
+          "effect": {}
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=nzLeRnXpPI4",
+          "type": "video",
+          "pickes": [
+            {
+              "start": 13,
+              "end": 33
+            }
+          ],
+          "crop": "300-0-1920-820",
+          "excludes": [
+            {
+              "start": 0,
+              "end": 13
+            },
+            {
+              "start": 33,
+              "end": 65
+            }
+          ],
+          "effect": {}
+        },
+        {
+          "url": "https://wallpapercave.com/wp/wp2459797.jpg",
+          "type": "image",
+          "pickes": [],
+          "crop": null,
+          "excludes": [],
+          "effect": {}
+        },
+        {
+          "url": "https://www.hdwallpapers.in/download/cheetah_savanna_africa-wide.jpg",
+          "type": "image",
+          "pickes": [],
+          "crop": null,
+          "excludes": [],
+          "effect": {}
+        }
+      ],
+      "content": [
+        ""
+      ]
+    }
+  ],
+  "is_vertical": false
+}

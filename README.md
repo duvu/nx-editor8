@@ -16,7 +16,7 @@ pip install pika python-dotenv
 RABBITMQ_URL=localhost
 RABBITMQ_USER=guest
 RABBITMQ_PASSWORD=guest
-RABBITMQ_VHOST=/
+RABBITMQ_VHOST=
 ```
 
 ## Usage

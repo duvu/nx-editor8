@@ -34,7 +34,7 @@
           "effect": {}
         },
         {
-          "url": "https://www.youtube.com/watch?v=LXb3EKWsInQ",
+          "url": "https://www.youtube.com/watch?v=Y7dpJ0oseIA",
           "type": "video",
           "pickes": [],
           "crop": "300-0-1920-820",
@@ -45,21 +45,21 @@
             },
             {
               "start": 16,
-              "end": 154
+              "end": 147
             },
             {
-              "start": 160,
-              "end": 165
+              "start": 153,
+              "end": 158
             },
             {
               "start": 120,
-              "end": 314
+              "end": 300
             }
           ],
           "effect": {}
         },
         {
-          "url": "https://i.ytimg.com/vi/T93_CLcMwng/maxresdefault.jpg",
+          "url": "https://hub.wtm.com/wp-content/uploads/2020/04/geran-de-klerk-yKiLWMWquKE-unsplash-1.jpg",
           "type": "image",
           "pickes": [],
           "crop": null,
@@ -67,7 +67,7 @@
           "effect": {}
         },
         {
-          "url": "https://hub.wtm.com/wp-content/uploads/2020/04/geran-de-klerk-yKiLWMWquKE-unsplash-1.jpg",
+          "url": "https://i.ytimg.com/vi/T93_CLcMwng/maxresdefault.jpg",
           "type": "image",
           "pickes": [],
           "crop": null,

@@ -43,6 +43,10 @@ def extract_article(message):
     Returns:
         dict: Bài viết và tiêu đề đã được trích xuất hoặc None nếu không tìm thấy bài viết
     """
+    # Set logger to DEBUG level for this function
+    original_level = logger.get_level()
+    logger.set_level('DEBUG')
+    
     logger.info("Starting extract_article processor")
     
     # Log message type and structure
@@ -62,56 +66,36 @@ def extract_article(message):
     
     if not article:
         logger.error("No article found in message")
+        logger.set_level(original_level)
         return None
     
-    # Trích xuất nội dung từ bài viết
-    # Loại bỏ các dòng bắt đầu bằng ký tự đặc biệt và dòng trống
-    SPECIAL_CHARS =  ('<', '>')
-    # Loại bỏ các dòng có chứa một số từ khoá không mong muốn
-    UNWANTED_KEYWORDS = ('VTVgo')
+    # DEBUG: Print the entire article content
+    logger.debug(f"FULL ARTICLE CONTENT: \n{article}")
     
-    EXCLUDED_PREFIXES = ('http://', 'https://')
+    # For markdown content, we want to keep all the content as is
+    # We'll just extract the title from the first line if it starts with #
+    lines = article.split('\n')
+    logger.debug(f"Article split into {len(lines)} lines")
     
-    # Tách thành các dòng và bỏ qua dòng đầu tiên (tiêu đề)
-    lines = article.split('\n')[1:]
+    # Extract title from first line if it starts with # (markdown header)
+    if lines and lines[0].startswith('#'):
+        title = lines[0].lstrip('#').strip()
+        logger.debug(f"Extracted title from content: '{title}'")
     
-    # Lọc các dòng hợp lệ
-    content_lines = []
-    for line in lines:
-        line = line.strip()
-        if not line:  # Bỏ qua dòng trống
-            continue
-
-        # Remove text between brackets
-        line = remove_text_between_brackets(line)
-
-        # Kiểm tra nếu dòng chứa từ khóa không mong muốn, chữ hoa hoặc chữ thường
-        if any(keyword.lower() in line.lower() for keyword in UNWANTED_KEYWORDS):
-            continue
-
-        # Kiểm tra nếu dòng chứa ký tự đặc biệt
-        if any(char in line for char in SPECIAL_CHARS):
-            continue
-
-        if any(line.startswith(prefix) for prefix in EXCLUDED_PREFIXES):
-            continue        
-        # Only add line if it still has content after cleaning
-        if line:
-            content_lines.append(line)
+    # We'll keep the entire content for processing
+    content = article
     
-    # Ghép các dòng lại thành nội dung hoàn chỉnh
-    content = '\n'.join(content_lines)
-    logger.info(f"Đã trích xuất nội dung: '{content}'")
+    # Log content preview
+    logger.debug(f"Final content length: {len(content)} characters")
+    logger.info(f"Đã trích xuất nội dung: '{content[:50]}...'")  # Only log first 50 chars
 
     # Return none if content is too short 
     if len(content) < 100:
-        logger.error("Content is too short")
+        logger.error(f"Content is too short: only {len(content)} characters (minimum 100)")
+        logger.set_level(original_level)
         return None
     
-    # Log the first few lines of the article for context
-    if article_length > 0:
-        preview_lines = article.split('\n')[:3]
-        preview = '\n'.join(preview_lines)
-        logger.debug(f"Article preview (first 3 lines):\n{preview}...")
+    # Reset logger level
+    logger.set_level(original_level)
     
-    return {"article": article, "title": title}  # Return both as a dictionary
+    return {"article": content, "title": title}
