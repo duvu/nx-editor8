@@ -58,8 +58,8 @@ from src.logger import logger
 # Định nghĩa các hằng số
 DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 DEFAULT_TIMEOUT = 5
-DEFAULT_MIN_WIDTH = 800
-DEFAULT_MIN_HEIGHT = 600
+DEFAULT_MIN_WIDTH = 1920
+DEFAULT_MIN_HEIGHT = 1080
 DEFAULT_MAX_RESULTS = 10
 
 
@@ -135,27 +135,17 @@ class ImageSearch:
             return []
 
     def _perform_duckduckgo_search(self, query: str, max_results: int) -> List[Dict[str, Any]]:
-        """
-        Thực hiện tìm kiếm hình ảnh từ DuckDuckGo
-        
-        Args:
-            query: Từ khóa tìm kiếm
-            max_results: Số lượng kết quả tối đa
-            
-        Returns:
-            Kết quả tìm kiếm từ DuckDuckGo
-        """
-        # Yêu cầu nhiều hơn số kết quả cần để có đủ sau khi lọc
         search_count = max_results * 2
-        
-        # Sử dụng thư viện duckduckgo-search để tìm kiếm hình ảnh với tham số kích thước
         results = list(self.ddgs.images(
             keywords=query,
             max_results=search_count,
-            size="large"  # Yêu cầu hình ảnh lớn
+            size="large",
+            type_image="photo",
+            layout="Square",
+            license_image="ShareCommercially"
         ))
         
-        logger.debug(f"DuckDuckGo returned {len(results)} initial results")
+        logger.debug(f"DuckDuckGo returned {len(results)} initial results for query: {query}")
         return results
 
     def _process_search_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -183,25 +173,12 @@ class ImageSearch:
         return detailed_results
 
     def _process_single_result(self, result: Dict[str, Any], image_url: str) -> Optional[Dict[str, Any]]:
-        """
-        Xử lý một kết quả tìm kiếm đơn lẻ
-        
-        Args:
-            result: Kết quả tìm kiếm
-            image_url: URL hình ảnh
-            
-        Returns:
-            Thông tin chi tiết về hình ảnh hoặc None nếu không đạt yêu cầu
-        """
-        # Lấy kích thước hình ảnh từ metadata nếu có
         width = result.get("width")
         height = result.get("height")
         
-        # Nếu kích thước có sẵn trong metadata
         if width and height:
             return self._create_result_from_metadata(image_url, width, height)
         
-        # Nếu không có kích thước trong metadata, kiểm tra trực tiếp
         dimensions = self.check_image_resolution(image_url)
         if dimensions:
             width, height = dimensions
@@ -213,7 +190,6 @@ class ImageSearch:
                     "size": width * height
                 }
         
-        # Nếu không thể kiểm tra kích thước, vẫn thêm vào nhưng với kích thước 0
         return {
             "url": image_url,
             "width": 0,
@@ -274,30 +250,14 @@ class ImageSearch:
         return image_urls
 
     def check_image_resolution(self, url: str, timeout: int = DEFAULT_TIMEOUT // 2) -> Optional[Tuple[int, int]]:
-        """
-        Kiểm tra độ phân giải của hình ảnh tại URL cụ thể
-        
-        Args:
-            url: URL của hình ảnh cần kiểm tra
-            timeout: Thời gian chờ tối đa (giây)
-            
-        Returns:
-            Tuple (chiều rộng, chiều cao) hoặc None nếu kiểm tra không thành công
-        """
         try:
-            # Kiểm tra nhanh xem URL có thể truy cập không
             if not self._is_valid_url(url):
                 logger.debug(f"Invalid URL format: {url}")
                 return None
-                
-            # Tải hình ảnh
+            
             response = self.session.get(url, stream=True, timeout=timeout)
             if response.status_code == 200:
-                # Đọc dữ liệu hình ảnh để lấy kích thước
-                img_data = BytesIO(response.content)
-                img = Image.open(img_data)
-                
-                # Trả về tuple (chiều rộng, chiều cao)
+                img = Image.open(BytesIO(response.raw.read(1024)))
                 dimensions = img.size
                 logger.debug(f"Image dimensions for {url}: {dimensions}")
                 return dimensions
