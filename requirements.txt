@@ -22,3 +22,35 @@ duckduckgo_search==7.5.0
 
 # Video processing
 yt-dlp==2024.3.10
+
+# NEW: Kafka integration dependencies
+kafka-python==2.0.2
+confluent-kafka==2.3.0
+
+# NEW: AI and LLM dependencies
+langchain>=0.1.0,<0.2.0
+langchain-core>=0.1.7,<0.2.0
+langgraph==0.0.26
+httpx==0.26.0
+litellm==1.28.0
+
+# NEW: Database dependencies
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.25
+alembic==1.13.1
+
+# NEW: Data validation and serialization
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# NEW: Async support
+asyncio-mqtt==0.16.2
+aiofiles==23.2.1
+
+# NEW: Structured logging
+structlog==24.1.0
+
+# NEW: Testing dependencies
+pytest==7.4.4
+pytest-asyncio==0.23.2
+pytest-mock==3.12.0

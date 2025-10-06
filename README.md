@@ -1,198 +1,256 @@
-# RabbitMQ Message Processor
-
-This project provides a Python-based RabbitMQ message processor that consumes messages from one queue, processes them, and publishes the results to another queue.
-
-## Setup
-
-1. Install dependencies:
-
-```bash
-pip install pika python-dotenv
-```
-
-2. Configure your `.env` file with RabbitMQ connection details:
-
-```
-RABBITMQ_URL=localhost
-RABBITMQ_USER=guest
-RABBITMQ_PASSWORD=guest
-RABBITMQ_VHOST=
-```
-
-## Usage
-
-### Basic Message Processing
-
-Run the basic processor:
-
-```bash
-python src/rabbitmq_processor.py
-```
-
-This will:
-- Connect to RabbitMQ using settings from your `.env` file
-- Start consuming messages from `input_queue`
-- Process each message (adding a timestamp)
-- Publish results to `output_queue`
-- Publish a test message to demonstrate functionality
-
-### Advanced Message Processing Examples
-
-Run one of the predefined processors:
-
-```bash
-python src/message_processing_examples.py PROCESSOR_TYPE INPUT_QUEUE OUTPUT_QUEUE [--test]
-```
-
-Where:
-- `PROCESSOR_TYPE`: one of `uppercase`, `filter`, `enrich`, `validate`, or `transform`
-- `INPUT_QUEUE`: the queue to consume messages from (default: `input_queue`)
-- `OUTPUT_QUEUE`: the queue to publish processed messages to (default: `{input_queue}_processed`)
-- `--test`: optional flag to publish a test message
-
-Examples:
-
-```bash
-# Process messages with the uppercase processor
-python src/message_processing_examples.py uppercase
-
-# Use the filter processor between custom queues and publish a test message
-python src/message_processing_examples.py filter tasks_queue filtered_tasks --test
-
-# Use the default enrich processor 
-python src/message_processing_examples.py
-```
-
-## Chained Message Processing
-
-The chained message processor allows you to build processing pipelines where messages flow through multiple processing steps in sequence.
-
-### Running Predefined Processing Chains
-
-```bash
-python src/processing_chain_examples.py CHAIN_TYPE INPUT_QUEUE OUTPUT_QUEUE [--test]
-```
-
-Where:
-- `CHAIN_TYPE`: one of `validation`, `enrichment`, `delivery`, or `complete`
-- `INPUT_QUEUE`: the queue to consume messages from (default: `chain_input`)
-- `OUTPUT_QUEUE`: the queue to publish processed messages to (default: `{input_queue}_processed`)
-- `--test`: optional flag to publish a test message
-
-Examples:
-
-```bash
-# Run the complete processing pipeline
-python src/processing_chain_examples.py complete
-
-# Run only the enrichment chain with custom queues
-python src/processing_chain_examples.py enrichment raw_data enriched_data --test
-```
-
-## Available Processors
-
-- **uppercase**: Converts all string values to uppercase
-- **filter**: Only passes messages with priority > 5 
-- **enrich**: Adds timestamp and processor information
-- **validate**: Validates message format and marks validity
-- **transform**: Restructures messages into a new format
-
-## Available Processing Chains
-
-- **validation**: Validates message structure and cleans data
-- **enrichment**: Adds additional information and computes metrics
-- **delivery**: Filters, transforms, and adds routing information
-- **complete**: Combines all processing steps in sequence
-
-## Creating Custom Processors
-
-Create your own processing function that takes a message and returns a processed message:
-
-```python
-def my_processor(message):
-    # Process the message
-    # Return None to drop the message
-    return processed_message
-
-processor.process_queue('input_queue', my_processor, 'output_queue')
-```
-
-## Creating Custom Processing Chains
-
-You can create custom processing chains by combining processor functions:
-
-```python
-from processor_chain import ProcessorChain
-from chained_rabbitmq_processor import ChainedRabbitMQProcessor
-
-# Create processors
-def first_step(message):
-    # Process message
-    return modified_message
-
-def second_step(message):
-    # Process message further
-    return modified_message
-
-# Create chain
-chain = ProcessorChain("my_custom_chain")
-chain.add_processor(first_step, "step1")
-chain.add_processor(second_step, "step2")
-chain.set_error_handler(my_error_handler)
-
-# Use with RabbitMQ
-processor = ChainedRabbitMQProcessor()
-processor.connect()
-processor.process_with_chain('input_queue', chain, 'output_queue')
-```
-
-## Features
-
-- Single processors or chains of processors
-- Automatic reconnection handling
-- Thread-safe message processing
-- JSON parsing and serialization
-- Graceful shutdown handling
-- Error handling in processor chains
-- Message routing and transformation
-
 # NX Editor 8
 
-## Installation
+AI-powered content processing service that transforms social media content into structured scenes for the xProjects ecosystem. Integrates with Kafka topics and provides intelligent content enhancement through LLM processing.
 
-1. Clone the repository:
-   ```
-   git clone https://github.com/your-username/nx-editor8.git
-   cd nx-editor8
-   ```
+## ✅ Implementation Status
 
-2. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
+**Phase 1: Core Infrastructure** - ✅ **COMPLETED**
+- ✅ Requirements verification system with intelligent content validation
+- ✅ Kafka integration (multi-topic consumption + nx-maker8 publishing)
+- ✅ LiteLLM client with EngineX compatibility and multi-fallback configuration
+- ✅ Main processing pipeline with async processing and comprehensive error handling
+- ✅ Complete configuration system with 40+ environment variables
+- ✅ Pydantic models for entire processing pipeline
+- ✅ Prompt templates for content analysis, enhancement, and scene generation
+- ✅ Comprehensive test suite and documentation
 
-3. Run the processor:
-   ```
-   python mainZ.py
-   ```
+**Phase 2: Database Integration** - 🔄 **PLANNED**
+- 🔄 PostgreSQL maker8 database integration
+- 🔄 Content persistence and retrieval
+- 🔄 Historical analysis capabilities
 
-## Features
+**Phase 3: Advanced Features** - 📋 **PLANNED**
+- 📋 Real-time processing dashboard
+- 📋 Content analytics and insights
+- 📋 Performance optimization
 
-- Script to JSON conversion
-- Automatic image replacement for unreachable URLs
-- Integration with DuckDuckGo for image search
-- RabbitMQ message processing
+## 🏗 Architecture
 
-## Configuration
+```
+Kafka Topics → Content Processing → Requirements Verification → AI Enhancement → Scene Generation → nx-maker8 Publishing
+```
 
-Adjust the settings in `src/config.py` to configure the application.
+**Input Sources:**
+- `youtube_content` - YouTube video analysis
+- `tiktok_content` - TikTok content processing  
+- `facebook_content` - Facebook post analysis
 
+**Output Target:**
+- `nx-maker8` topic - Structured scene data for maker8 ecosystem
 
-# Process a file directly
-python mainZ.py --input-file article.txt --output-file result.json --title "My Article"
+**Core Components:**
+- **Requirements Validator**: Intelligent content validation with LLM-powered enhancement
+- **LiteLLM Client**: EngineX-compatible AI processing with retry logic
+- **Kafka Integration**: SASL-authenticated consumer/producer with message validation
+- **Message Processor**: Async pipeline coordinating all processing stages
 
-# Run in queue mode with custom queue names
-python mainZ.py --queue-mode --input-queue custom_input --output-queue custom_output
+## ⚙ Configuration
 
-# Default behavior (queue mode with default queue names)
-python mainZ.py
+Create `.env` file from template:
+
+```bash
+cp .env.example .env
+```
+
+### Essential Configuration
+
+```bash
+# Kafka Configuration (Required)
+KAFKA_BOOTSTRAP_SERVERS=10.113.213.1:9094
+KAFKA_USERNAME=client
+KAFKA_PASSWORD=client-secret
+
+# LiteLLM Configuration (Required)
+LITELLM_API_BASE=http://10.113.213.1:4000
+LITELLM_API_KEY=your-api-key
+
+# Content Requirements (Configurable)
+MIN_WORD_COUNT=50
+MAX_WORD_COUNT=2000
+MIN_CHAR_COUNT=200
+MAX_CHAR_COUNT=10000
+```
+
+See `.env.example` for complete configuration options with fallback patterns.
+
+## 🚀 Installation & Setup
+
+1. **Install Dependencies:**
+```bash
+pip install -r requirements.txt
+```
+
+2. **Configure Environment:**
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+3. **Run Service:**
+```bash
+python src/main_new.py
+```
+
+## 🔧 Usage
+
+### Service Mode (Default)
+```bash
+python src/main_new.py
+```
+
+Runs continuous Kafka consumer processing multiple content topics.
+
+### Development & Testing
+```bash
+# Run tests
+pytest tests/
+
+# Check configuration
+python -c "from src.core.config import Settings; print(Settings().dict())"
+
+# Test Kafka connectivity  
+python -c "from src.integrations.kafka_client import ContentKafkaConsumer; consumer = ContentKafkaConsumer(); print('Kafka OK')"
+
+# Test LLM client
+python -c "from src.integrations.llm_client import get_llm_client; import asyncio; asyncio.run(get_llm_client().generate('test'))"
+```
+
+## 📊 Features
+
+### Content Requirements Verification
+- **Word/Character Count Validation**: Configurable min/max limits
+- **Format Detection**: Automatic content type identification
+- **Language Validation**: Multi-language content support
+- **LLM Enhancement**: Intelligent content expansion when requirements not met
+- **Retry Logic**: Robust enhancement with intelligent fallback
+
+### AI Processing Pipeline
+- **Content Analysis**: Deep content understanding and categorization
+- **Scene Generation**: Transform content into structured scene format
+- **Enhancement**: LLM-powered content improvement
+- **Validation**: Multi-stage content quality verification
+
+### Kafka Integration
+- **Multi-topic Consumption**: YouTube, TikTok, Facebook content sources
+- **SASL Authentication**: Secure xProjects ecosystem integration
+- **Message Validation**: Structured format verification
+- **Error Handling**: Comprehensive error topic publishing
+
+### Technical Features
+- **EngineX Compatibility**: Follows established xProjects patterns
+- **Async Processing**: High-performance async/await implementation
+- **Configuration Fallbacks**: Multi-level environment variable fallbacks
+- **Comprehensive Logging**: Structured logging throughout pipeline
+- **Error Recovery**: Intelligent retry and fallback mechanisms
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+pytest
+
+# Run specific test categories
+pytest tests/test_config.py                 # Configuration tests
+pytest tests/test_requirements_validator.py # Requirements validation tests
+pytest tests/test_llm_client.py            # LLM client tests
+pytest tests/test_kafka_client.py          # Kafka integration tests
+pytest tests/test_message_processor.py     # Pipeline tests
+
+# Run with coverage
+pytest --cov=src tests/
+```
+
+## 📁 Project Structure
+
+```
+nx-editor8/
+├── src/
+│   ├── core/
+│   │   ├── config.py              # Multi-fallback configuration system
+│   │   └── message_processor.py   # Main processing pipeline
+│   ├── integrations/
+│   │   ├── kafka_client.py        # Kafka consumer/producer
+│   │   └── llm_client.py          # LiteLLM client with EngineX compatibility
+│   ├── validation/
+│   │   └── requirements_validator.py # Content validation and enhancement
+│   ├── models/
+│   │   └── content_models.py      # Pydantic models for pipeline
+│   ├── ai/
+│   │   └── prompt_templates/      # LLM prompt templates
+│   └── main_new.py               # Service entry point
+├── tests/                        # Comprehensive test suite
+├── .env.example                  # Configuration template
+├── requirements.txt              # Python dependencies
+└── README.md                     # This file
+```
+
+## 🔗 Integration
+
+### xProjects Ecosystem Integration
+- **Kafka Topics**: Consumes from social media content topics
+- **nx-maker8**: Publishes structured scene data
+- **EngineX Patterns**: Follows established configuration and client patterns
+- **Infrastructure**: Uses shared Kafka cluster and LiteLLM service
+
+### Dependencies
+- **kafka-python**: Kafka client library
+- **litellm**: LLM client library  
+- **pydantic**: Data validation and settings
+- **httpx**: Async HTTP client
+- **pytest**: Testing framework
+
+## 📋 Development Roadmap
+
+### Phase 2: Database Integration
+- PostgreSQL maker8 integration for content persistence
+- Historical content analysis and retrieval
+- Content versioning and audit trail
+
+### Phase 3: Advanced Features  
+- Real-time processing dashboard
+- Content analytics and performance metrics
+- Advanced AI model selection and optimization
+- Content recommendation system
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Kafka Connection Issues:**
+```bash
+# Check Kafka connectivity
+kafkacat -b 10.113.213.1:9094 -L
+
+# Verify SASL authentication
+kafkacat -b 10.113.213.1:9094 -X security.protocol=SASL_PLAINTEXT -X sasl.mechanisms=PLAIN -X sasl.username=client -X sasl.password=client-secret -L
+```
+
+**LiteLLM Issues:**
+```bash
+# Test LiteLLM endpoint
+curl http://10.113.213.1:4000/health
+
+# Check API key configuration
+echo $LITELLM_API_KEY
+```
+
+**Configuration Issues:**
+```bash
+# Validate configuration
+python -c "from src.core.config import Settings; s = Settings(); print('✅ Configuration valid')"
+
+# Check environment variables
+env | grep -E "(KAFKA|LITELLM|NX_EDITOR)"
+```
+
+## 🤝 Contributing
+
+1. Follow xProjects coding conventions
+2. Maintain file size limits (≤350 lines)
+3. Include comprehensive tests for new features
+4. Update documentation for changes
+5. Follow established architecture patterns
+
+## 📄 License
+
+Part of the xProjects ecosystem. See project root for license information.
